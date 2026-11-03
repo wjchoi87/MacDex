@@ -8,6 +8,7 @@ Built on [scrcpy](https://github.com/Genymobile/scrcpy) (Apache-2.0) for the str
 
 - **Screen mirroring** — ultra-low-latency mirroring with hardware decoding (Metal + VideoToolbox), quality presets (Balanced / Crisp / Lightweight) and full manual control (codec, bitrate, resolution, fps)
 - **DeX mode** — launch Android apps in separate windows, each on its own **independent virtual display**; the phone screen stays untouched, and multiple apps run at the same time. Launching an app that is already running asks whether you want a separate new instance or to restart it
+- **DeX desktop** — Samsung phones: open the full DeX desktop (taskbar, wallpaper, app grid) in a single window, via a virtual display + the One UI `SecondaryLauncher`. Non-Samsung devices don't get this button
 - **Physical keyboard & mouse** — uhid mode gives you hover, game keys, and your phone's IME (Korean/Japanese/…) exactly like a hardware keyboard
 - **Wireless** — pair with a 6-digit code, connect directly by IP, discover devices via mDNS, or switch a USB connection to Wi-Fi in one click
 - **File transfer** — send files to the phone's Download folder
@@ -64,9 +65,10 @@ ADB_SRC=/path/to/adb AAPT2_SRC=/path/to/aapt2 SCRCPY_SRC=/path/to/scrcpy ./scrip
 ## Usage
 
 - **Mirror** — select the device, click *Screen mirroring*
-- **DeX windows** — open the app launcher and double-click any app; it opens in its own window on a virtual display (the phone screen is unaffected). Double-clicking a running app asks whether to open a separate new instance or restart it
+- **DeX windows** — open the app launcher and double-click any app; it opens in its own window on a virtual display (the phone screen is unaffected). Open as many apps as you like — each gets its own window, like using a desktop OS. Double-clicking a running app asks whether to open a separate new instance or restart it
+- **DeX desktop** (Samsung only) — click *DeX desktop* to get the whole DeX home screen (taskbar, wallpaper) in one window; run apps inside it like on a monitor
 - **Go wireless** — with a USB device selected, click *Switch to wireless*, then unplug the cable
-- **Settings** — quality presets, codec/bitrate/resolution/fps, audio, virtual display resolution & DPI, uhid advanced input
+- **Settings** — quality presets, codec/bitrate/resolution/fps, audio, virtual display resolution & DPI, uhid advanced input. Capture fps is unlimited by default; virtual displays are capped at 60 Hz by the device itself, and smoothness at 1080p mostly depends on bitrate (default 20 Mbps)
 - Shortcuts inside mirroring windows are scrcpy's own (`MOD+F` fullscreen, …) — see `scrcpy --help`
 - While any DeX/mirror session is running, the phone is kept from sleeping (`stay_on_while_plugged_in`); your previous setting is restored when the last session closes
 

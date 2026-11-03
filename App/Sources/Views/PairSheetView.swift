@@ -42,10 +42,11 @@ struct PairSheetView: View {
            그 위를 덮어 페어링/연결 진행이 안 보였다. 같은 StatusBanner를 시트 하단에도 둔다. */
         .safeAreaInset(edge: .bottom) {
             if appState.busyMessage != nil || appState.toast != nil || appState.lastError != nil {
+                /* 배너는 내부에서 Capsule + material 배경을 이미 그리므로, 여기서 사각 material을
+                   한 번 더 깔면 캡슐 뒤에 네모난 판이 비쳐 보인다. 배경 없이 패딩만 준다. */
                 StatusBanner()
                     .padding(.horizontal, 16)
                     .padding(.bottom, 4)
-                    .background(.ultraThinMaterial)
             }
         }
     }

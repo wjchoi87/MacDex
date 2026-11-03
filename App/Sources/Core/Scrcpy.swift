@@ -8,6 +8,7 @@ struct ScrcpySession: Identifiable, @unchecked Sendable {
     enum Mode: String, Sendable {
         case mirror
         case app
+        case dex   // DeX 데스크톱 전체(작업표시줄+런처)를 가상 디스플레이에 띄우기
     }
 
     let id: String                 // serial|mode|package — 조회·중복판단용 안정 식별자
@@ -98,6 +99,19 @@ enum Scrcpy {
         args += ["--new-display=\(vd.width)x\(vd.height)/\(vd.density)"]
         args += ["--start-app=\(forceNewInstance ? "+" : "")\(app.package)"]
         args += ["--window-title", "MacDroid · \(app.displayLabel)"]
+        return args
+    }
+
+    /// DeX 데스크톱: 빈 가상 디스플레이를 띄우고, 호출부가 그 위에 삼성 DeX 런처
+    /// (com.honeyspace.dexservice.SecondaryLauncher)를 am start로 올린다.
+    /// 실측(SM-S936N, One UI): 가상 디스플레이 + SecondaryLauncher = 작업표시줄·배경화면이
+    /// 있는 완전한 DeX 데스크톱이 뜬다. 여기선 디스플레이만 만들고(창 = DeX 화면),
+    /// 앱은 --start-app 대신 am start --display <id>로 띄운다.
+    static func dexArguments(device: Device, settings: MirrorSettings, audioAllowed: Bool) -> [String] {
+        var args = commonArgs(device: device, settings: settings, audioAllowed: audioAllowed)
+        let vd = settings.virtualDisplay
+        args += ["--new-display=\(vd.width)x\(vd.height)/\(vd.density)"]
+        args += ["--window-title", "MacDroid · \(device.displayModel) DeX"]
         return args
     }
 

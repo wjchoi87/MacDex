@@ -196,6 +196,52 @@ final class AppState {
         }
     }
 
+    /// DeX 데스크톱 전체(가상 디스플레이 + 삼성 SecondaryLauncher).
+    /* 정책: 미러와 같은 규칙 — 기기당 DeX 데스크톱 창은 1개. 다시 누르면 기존 창을
+       종료하고 새로 띄운다. 디스플레이 생성은 비동기(scrcpy 서버 푸시)이므로,
+       실행 전 디스플레이 목록을 저장해 두고 새 id가 생기면 그 위에 DeX 런처를 올린다. */
+    func launchDexDesktop(for device: Device) {
+        guard ADB.supportsDexDesktop(device) else {
+            lastError = "DeX 데스크톱은 Samsung(DeX 지원) 기기에서 사용할 수 있습니다."
+            return
+        }
+        let existing = sessions.first { $0.deviceSerial == device.serial && $0.mode == .dex }
+        existing?.terminate()
+
+        var session = ScrcpySession(
+            id: Scrcpy.makeID(serial: device.serial, mode: .dex, package: nil),
+            deviceSerial: device.serial,
+            mode: .dex,
+            title: "MacDroid · \(device.displayModel) DeX 데스크톱"
+        )
+        let audioAllowed = !sessions.contains { $0.deviceSerial == device.serial }
+        let args = Scrcpy.dexArguments(device: device, settings: settings, audioAllowed: audioAllowed)
+        beginStayAwakeIfNeeded(serial: device.serial)
+
+        Task { @MainActor in
+            // 새 디스플레이 감지 기준선 — scrcpy 실행 '전'에 반드시 확보한다
+            let before = Set((try? await ADB.displayIds(serial: device.serial)) ?? [])
+            do {
+                let process = try Scrcpy.launch(arguments: args, sessionID: session.key)
+                session.attach(process)
+                sessions.removeAll { $0.id == session.id }
+                sessions.append(session)
+
+                // 디스플레이가 생기면 DeX 런처를 올린다. 못 찾으면 창을 정리하고 안내.
+                guard let displayId = await ADB.newDisplayId(serial: device.serial, excluding: before) else {
+                    if sessions.contains(where: { $0.key == session.key }) {
+                        session.terminate()
+                        lastError = "DeX 디스플레이를 만들지 못했습니다. 잠시 후 다시 시도하세요."
+                    }
+                    return
+                }
+                try await ADB.startDexLauncher(serial: device.serial, displayId: displayId)
+            } catch {
+                lastError = "DeX 데스크톱 실행 실패: \(error.localizedDescription)"
+            }
+        }
+    }
+
     /// 기존 창을 종료하고 새로 실행(확인 다이얼로그에서 '기존 창 닫고 새로 실행'을 고른 경로).
     func relaunchAppWindow(for device: Device, app: AndroidApp) {
         let id = Scrcpy.makeID(serial: device.serial, mode: .app, package: app.package)

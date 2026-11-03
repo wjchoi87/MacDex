@@ -258,6 +258,41 @@ enum ADB {
         guard result.succeeded else { throw ADBError.failure(result.output) }
     }
 
+    // MARK: DeX 데스크톱 (Samsung)
+
+    /// 삼성 DeX 보조 런처 컴포넌트 — 가상 디스플레이에 띄우면 작업표시줄·배경화면이 있는
+    /// DeX 데스크톱이 된다(One UI 실측). 삼성 기기에만 존재한다.
+    private static let dexLauncherComponent = "com.sec.android.app.launcher/com.honeyspace.dexservice.SecondaryLauncher"
+
+    /// 기기가 DeX 데스크톱을 지원하는지(삼성 폰/태블릿).
+    static func supportsDexDesktop(_ device: Device) -> Bool {
+        let maker = (device.manufacturer ?? device.brand ?? "").lowercased()
+        return maker.contains("samsung")
+    }
+
+    /// 새로 생긴 가상 디스플레이 id를 폴링으로 찾는다.
+    /// scrcpy가 디스플레이를 만드는 데 서버 푸시 시간이 걸리므로 timeout까지 재시도.
+    static func newDisplayId(serial: String, excluding before: Set<Int>,
+                             timeout: TimeInterval = 8) async -> Int? {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let ids = try? await displayIds(serial: serial),
+               let fresh = ids.first(where: { !before.contains($0) && $0 != 0 }) {
+                return fresh
+            }
+            try? await Task.sleep(for: .milliseconds(400))
+        }
+        return nil
+    }
+
+    /// DeX 런처를 지정 디스플레이에 띄운다(이미 떠 있으면 앞으로 가져오는 것과 동등 — 멱등).
+    static func startDexLauncher(serial: String, displayId: Int) async throws {
+        _ = try await shell(
+            serial: serial,
+            "am start --display \(displayId) -n \(dexLauncherComponent)"
+        )
+    }
+
     // MARK: 화면/입력 (에이전트 CLI용)
 
     /// 현재 존재하는 디스플레이 id 집합 — scrcpy 가상디스플레이 감지(diff)용.

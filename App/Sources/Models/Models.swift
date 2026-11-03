@@ -110,16 +110,19 @@ enum QualityPreset: String, CaseIterable, Codable, Sendable, Identifiable {
 
     var subtitle: String {
         switch self {
-        case .balanced: return "H.264 · 8 Mbps · 최대 1920px"
-        case .crisp: return "H.265 · 16 Mbps · 최대 2560px"
+        case .balanced: return "H.264 · 20 Mbps · 최대 1920px"
+        case .crisp: return "H.265 · 30 Mbps · 최대 2560px"
         case .lightweight: return "H.264 · 4 Mbps · 최대 1280px · 60fps 제한"
         }
     }
 
     var values: MirrorSettings.Video {
         switch self {
-        case .balanced: return .init(codec: "h264", bitRateMbps: 8, maxSize: 1920, maxFPS: 0)
-        case .crisp: return .init(codec: "h265", bitRateMbps: 16, maxSize: 2560, maxFPS: 0)
+        /* 비트레이트 정책: 움직임에서 블록/끊김(버벅임으로 느껴짐)이 나지 않는 수준으로.
+           가상 디스플레이는 기기가 60Hz로 상한(One UI 실측 — new-display fps 파라미터 무시)이고
+           캡처 프레임은 이미 무제한(maxFPS 0)이므로, 매끄러움을 좌우하는 건 비트레이트다. */
+        case .balanced: return .init(codec: "h264", bitRateMbps: 20, maxSize: 1920, maxFPS: 0)
+        case .crisp: return .init(codec: "h265", bitRateMbps: 30, maxSize: 2560, maxFPS: 0)
         case .lightweight: return .init(codec: "h264", bitRateMbps: 4, maxSize: 1280, maxFPS: 60)
         }
     }

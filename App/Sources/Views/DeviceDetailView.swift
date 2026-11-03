@@ -89,6 +89,14 @@ struct DeviceDetailView: View {
         return "battery.100.bolt"
     }
 
+    private func sessionIcon(_ mode: ScrcpySession.Mode) -> String {
+        switch mode {
+        case .mirror: "rectangle.on.rectangle"
+        case .dex: "dock.rectangle"
+        case .app: "app"
+        }
+    }
+
     // MARK: 승인 필요
 
     private var unauthorizedCard: some View {
@@ -118,12 +126,18 @@ struct DeviceDetailView: View {
                              prominent: device.state == .online) {
                     appState.launchMirror(for: device)
                 }
-                ActionButton(title: "DeX 앱 런처", icon: "square.grid.2x2",
-                             prominent: device.state == .online) {
-                    openWindow(id: "launcher", value: device.serial)
+                if ADB.supportsDexDesktop(device) {
+                    ActionButton(title: "DeX 데스크톱", icon: "dock.rectangle",
+                                 prominent: device.state == .online) {
+                        appState.launchDexDesktop(for: device)
+                    }
+                    .help("작업표시줄·런처가 있는 DeX 화면 전체를 창으로 띄웁니다")
                 }
             }
             GridRow {
+                ActionButton(title: "DeX 앱 런처", icon: "square.grid.2x2") {
+                    openWindow(id: "launcher", value: device.serial)
+                }
                 if device.isUSB {
                     ActionButton(title: "무선으로 전환", icon: "wifi") {
                         appState.enableWireless(for: device)
@@ -168,7 +182,7 @@ struct DeviceDetailView: View {
                 .font(.headline)
             ForEach(deviceSessions) { session in
                 HStack {
-                    Image(systemName: session.mode == .mirror ? "rectangle.on.rectangle" : "app")
+                    Image(systemName: sessionIcon(session.mode))
                         .foregroundStyle(.tint)
                     Text(session.title)
                         .lineLimit(1)
