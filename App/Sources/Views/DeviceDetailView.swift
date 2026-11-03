@@ -126,16 +126,13 @@ struct DeviceDetailView: View {
                              prominent: device.state == .online) {
                     appState.launchMirror(for: device)
                 }
-                /* 정책: DeX 데스크톱 버튼은 항상 보이게 한다(삼성이 아니면 비활성 + 안내).
-                   Samsung 전용이라 감추면 "기능이 없다"로 느껴지고 무엇을 지원하는지 알 수 없다. */
+                /* 정책: DeX 데스크톱은 기기 무관(우리만의 DeX — 독 + 가상 디스플레이).
+                   삼성에서는 DeX 런처(작업표시줄)가 추가로 뜬다. */
                 ActionButton(title: "DeX 데스크톱", icon: "dock.rectangle",
-                             prominent: device.state == .online && ADB.supportsDexDesktop(device)) {
+                             prominent: device.state == .online) {
                     appState.launchDexDesktop(for: device)
                 }
-                .disabled(!ADB.supportsDexDesktop(device))
-                .help(ADB.supportsDexDesktop(device)
-                      ? "작업표시줄·런처가 있는 DeX 화면 전체를 창으로 띄웁니다"
-                      : "Samsung(DeX 지원) 기기 전용입니다 — 다른 기기는 'DeX 앱 런처'로 앱별 창을 사용하세요")
+                .help("DeX 모니터 창 + DeX 독을 띄웁니다 — 독에서 앱을 골라 DeX 화면에서 쓰세요")
             }
             GridRow {
                 ActionButton(title: "DeX 앱 런처", icon: "square.grid.2x2") {

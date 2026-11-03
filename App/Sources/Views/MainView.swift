@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MainView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.openWindow) private var openWindow
     @State private var selectedSerial: String?
     // 정책: 시트는 한 브랜치에 하나만 — 여러 sheet 수정자를 붙이면 macOS에서
     //   해제 동작이 무시되는 SwiftUI 함정이 있어 item 기반 단일 시트로 통합했다.
@@ -47,6 +48,12 @@ struct MainView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .macdroidOpenPair)) { _ in
             activeSheet = .pair
+        }
+        // DeX 데스크톱 실행 완료 → 독 패널 창 열기(모니터 창과 세트)
+        .onReceive(NotificationCenter.default.publisher(for: .macdroidOpenDexDock)) { note in
+            if let serial = note.object as? String {
+                openWindow(id: "dexdock", value: serial)
+            }
         }
         .overlay(alignment: .bottom) {
             StatusBanner()

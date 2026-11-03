@@ -43,6 +43,18 @@ struct MacDroidApp: App {
         }
         .defaultSize(width: 1000, height: 660)
 
+        // DeX 독 — 우리만의 DeX 데스크톱 셸 패널(모니터 창 옆에 함께 쓴다)
+        WindowGroup(id: "dexdock", for: String.self) { $serial in
+            if let serial {
+                DexDockView(serial: serial)
+                    .environment(appState)
+            } else {
+                ContentUnavailableView("기기 없음", systemImage: "iphone.slash",
+                                       description: Text("연결된 기기를 선택하세요."))
+            }
+        }
+        .defaultSize(width: 340, height: 580)
+
         Settings {
             SettingsView()
                 .environment(appState)
@@ -77,4 +89,5 @@ struct MacDroidCommands: Commands {
 
 extension Notification.Name {
     static let macdroidOpenPair = Notification.Name("macdroidOpenPair")
+    static let macdroidOpenDexDock = Notification.Name("macdroidOpenDexDock")
 }

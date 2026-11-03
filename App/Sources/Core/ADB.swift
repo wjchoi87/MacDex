@@ -297,6 +297,32 @@ enum ADB {
         )
     }
 
+    /// 패키지의 실행 액티비티(component)를 해석 — am start -n 으로 띄우기 위함.
+    static func resolveLaunchComponent(serial: String, package: String) async throws -> String? {
+        let out = try await shell(
+            serial: serial,
+            "cmd package resolve-activity --brief -c android.intent.category.LAUNCHER \(package) | tail -1"
+        )
+        let line = out.split(separator: "\n").last?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return line.contains("/") ? line : nil
+    }
+
+    /* 우리만의 DeX 정책: DeX 창(가상 디스플레이)은 "모니터"이고 데스크톱 셸은
+       맥 쪽 DeX 독이 맡는다. 독에서 앱을 누르면 그 디스플레이에서 실행/전환한다.
+       삼성 SecondaryLauncher는 삼성에서만 보너스로 띄운다(작업표시줄 등).
+       이미 그 디스플레이에 떠 있는 앱이면 am start가 task를 앞으로 가져온다. */
+    static func startAppOnDisplay(serial: String, package: String, displayId: Int) async throws {
+        let resolved = try await resolveLaunchComponent(serial: serial, package: package)
+        let target = resolved.map { "-n \($0)" } ?? package
+        _ = try await shell(serial: serial, "am start \(target) --display \(displayId)")
+    }
+
+    /// 지정 디스플레이에 키 입력(뒤로 등) — DeX 독의 내비게이션용.
+    static func keyOnDisplay(serial: String, displayId: Int, keycode: Int) async throws {
+        try await input(serial: serial, displayId: displayId, ["keyevent", "\(keycode)"])
+    }
+
     // MARK: 화면/입력 (에이전트 CLI용)
 
     /// 현재 존재하는 디스플레이 id 집합 — scrcpy 가상디스플레이 감지(diff)용.
