@@ -94,6 +94,7 @@ enum ADB {
         echo "MODEL:$(getprop ro.product.model)"; \
         echo "RELEASE:$(getprop ro.build.version.release)"; \
         echo "SDK:$(getprop ro.build.version.sdk)"; \
+        echo "SERIALNO:$(getprop ro.serialno)"; \
         echo "SIZE:$(wm size | head -1 | cut -d' ' -f3)"
         """
         if let out = try? await shell(serial: device.serial, propsCmd), device.state == .online {
@@ -107,6 +108,7 @@ enum ADB {
                 case "MODEL": d.model = value.isEmpty ? nil : value
                 case "RELEASE": d.androidVersion = value.isEmpty ? nil : value
                 case "SDK": d.sdkInt = Int(value)
+                case "SERIALNO": d.serialNo = value.isEmpty ? nil : value
                 case "SIZE": d.screenSize = value.isEmpty ? nil : value
                 default: break
                 }
@@ -165,19 +167,94 @@ enum ADB {
         throw ADBError.failure(output)
     }
 
-    static func connect(host: String, timeout: TimeInterval = 8) async throws -> String {
-        let result = try await ProcessRunner.run(
-            Binaries.adb, arguments: ["connect", host], environment: env, timeout: timeout
-        )
-        let output = result.output
-        if output.contains("connected") && !output.contains("cannot connect") {
-            return output
-        }
-        throw ADBError.failure(output)
+    /// 무선 connect 최종 판정(실제 기기 상태 확인까지 끝난 결과).
+    enum ConnectOutcome: Sendable, Equatable {
+        case online                 // 'device' 상태 확인됨 — 바로 사용 가능
+        case unauthorized           // 폰에서 디버깅 허용 대기(전송은 유지)
+        case notAuthenticated       // 연결은 됐지만 인증/응답 없음 — 무선 디버깅 포트면 페어링 필요
+        case refused                // 포트 닫힘(무선 디버깅 포트는 토글마다 바뀐다)
+        case unreachable(String)    // No route to host 등 — 사설 LAN이면 서버의 로컬 네트워크 권한 의심
+        case timedOut
+        case failed(String)
     }
 
-    static func disconnect(serial: String) async throws {
-        _ = try? await ProcessRunner.run(Binaries.adb, arguments: ["disconnect", serial], environment: env)
+    /* 변경 전 정책: `adb connect` 출력에 "connected"가 있으면 성공으로 봤다.
+       결함: adb는 이미 있는 전송이 offline이어도 "already connected to …"를 돌려주고,
+       무선 디버깅(TLS) 포트는 페어링이 안 됐어도 "connected to"를 찍은 뒤 기기를 offline으로
+       남긴다 → 앱은 "연결됨"을 띄우는데 실제로는 쓸 수 없다("한 번에 연결되는 적이 없다").
+       변경 후 정책: ① 같은 주소의 비정상(offline 등) 잔류 전송을 먼저 disconnect ② connect
+       ③ `adb devices`로 실제 상태가 device가 될 때까지 최대 6초 확인. 끝내 offline이면 잔류
+       전송을 다시 정리하고 notAuthenticated, unauthorized면 폰 허용을 기다리도록 전송을 남긴다.
+       영향 범위: IP 직접/자동발견 연결, USB→무선 전환, 자동 재접속 스윕, 연결 복구, CLI connect. */
+    static func connectVerified(host: String, timeout: TimeInterval = 8) async -> ConnectOutcome {
+        let outcome = await connectAttempt(host: host, timeout: timeout)
+        switch outcome {
+        case .online, .unauthorized:
+            return outcome
+        default:
+            // 실패면 서버에 반쯤 열린 전송이 offline으로 남는다(실측: connect 타임아웃 후 클라이언트를
+            // 죽여도 서버는 'host offline'을 유지) — 다음 시도가 "already connected"로 오판되지 않게 정리
+            await disconnect(serial: host)
+            return outcome
+        }
+    }
+
+    private static func connectAttempt(host: String, timeout: TimeInterval) async -> ConnectOutcome {
+        if let existing = try? await listDevices().first(where: { $0.serial == host }) {
+            if existing.state == .online { return .online }
+            await disconnect(serial: host)
+        }
+
+        let output: String
+        do {
+            output = try await ProcessRunner.run(
+                Binaries.adb, arguments: ["connect", host], environment: env, timeout: timeout
+            ).output
+        } catch ProcessError.timedOut {
+            return .timedOut
+        } catch {
+            return .failed(error.localizedDescription)
+        }
+
+        let text = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower = text.lowercased()
+        if lower.contains("connection refused") { return .refused }
+        if lower.contains("no route to host") || lower.contains("network is unreachable")
+            || lower.contains("host is down") {
+            return .unreachable(text)
+        }
+        if lower.contains("timed out") { return .timedOut }
+        if lower.contains("authenticate") { return .notAuthenticated }
+        guard lower.contains("connected to"), !lower.contains("failed"), !lower.contains("cannot") else {
+            return .failed(text)
+        }
+
+        // 출력만 믿지 않는다 — 실제 상태가 device가 될 때까지 확인
+        var lastState: DeviceState?
+        let deadline = Date().addingTimeInterval(6)
+        while Date() < deadline {
+            if let device = try? await listDevices().first(where: { $0.serial == host }) {
+                lastState = device.state
+                if device.state == .online { return .online }
+            }
+            try? await Task.sleep(for: .milliseconds(400))
+        }
+        return lastState == .unauthorized ? .unauthorized : .notAuthenticated
+    }
+
+    static func disconnect(serial: String) async {
+        _ = try? await ProcessRunner.run(Binaries.adb, arguments: ["disconnect", serial],
+                                         environment: env, timeout: 5)
+    }
+
+    /// adb 서버를 이 번들 adb로 재시작한다.
+    /* 정책: kill-server는 같은 Mac의 다른 adb 클라이언트(Android Studio·터미널·scrcpy) 연결도
+       끊는다. 그래서 '근거가 있을 때만' 호출한다 — 앱 자신은 LAN 기기에 TCP로 닿는데 서버만
+       못 닿는 경우(서버를 띄운 프로세스에 로컬 네트워크 권한이 없음 — 실측: macOS는 폰 서비스를
+       보는데 서버 mDNS는 0건). MacDroid가 띄운 서버는 MacDroid의 권한을 따른다. */
+    static func restartServer() async {
+        _ = try? await ProcessRunner.run(Binaries.adb, arguments: ["kill-server"], environment: env, timeout: 10)
+        _ = try? await ProcessRunner.run(Binaries.adb, arguments: ["start-server"], environment: env, timeout: 15)
     }
 
     /// USB로 연결된 기기를 TCP(5555) 모드로 전환하고 무선 주소를 돌려준다.
@@ -196,9 +273,12 @@ enum ADB {
             Binaries.adb, arguments: ["-s", serial, "tcpip", "5555"], environment: env
         )
         guard switchResult.succeeded else { throw ADBError.failure(switchResult.output) }
-        // adbd가 TCP로 재시작될 때까지 잠시 대기 후 무선 연결
+        // adbd가 TCP로 재시작될 때까지 잠시 대기 후 무선 연결 — 실제 device 상태까지 확인
         try await Task.sleep(for: .seconds(2))
-        _ = try await connect(host: host)
+        let outcome = await connectVerified(host: host)
+        guard outcome == .online else {
+            throw ADBError.failure("\(host) 연결 확인 실패(\(outcome)) — 폰과 맥이 같은 네트워크인지 확인하세요.")
+        }
         return host
     }
 

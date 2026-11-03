@@ -314,9 +314,14 @@ enum CLI {
     }
 
     static func connect(_ args: [String]) async throws {
-        guard let host = args.first(where: { !$0.hasPrefix("--") }) else { usageWireless(); exit(2) }
-        let output = try await ADB.connect(host: host)
-        print(output.trimmingCharacters(in: .whitespacesAndNewlines))
+        guard let raw = args.first(where: { !$0.hasPrefix("--") }) else { usageWireless(); exit(2) }
+        let host = raw.contains(":") ? raw : raw + ":5555"
+        // 출력 문자열이 아니라 실제 device 상태까지 확인한 결과로 성공/실패를 판정한다
+        let outcome = await ADB.connectVerified(host: host)
+        guard outcome == .online else {
+            throw ADBError.failure("\(host) 연결 실패: \(outcome)")
+        }
+        print("연결됨: \(host) (device)")
     }
 
     static func pairCmd(_ args: [String]) async throws {

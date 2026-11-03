@@ -4,7 +4,7 @@ import AppKit
 
 /// 로컬 네트워크 권한 상태.
 enum LocalNetworkStatus: Sendable, Equatable {
-    case granted       // 탐색 동작(결과 수신 또는 브라우저 ready) — 권한 있음
+    case granted       // 앱이 LAN 기기에 실제 TCP 연결 성공 — 권한 있음
     case denied        // 정책 거부(kDNSServiceErr_PolicyDenied) — 시스템 설정에서 허용 필요
     case unknown       // 판단 불가(타임아웃 등) — 안내만 약하게
 }
@@ -54,7 +54,9 @@ enum LocalNetworkPermission {
             browser.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
-                    finish(.granted)   // 탐색 정상 동작 = 권한 허용됨
+                    // ready는 사용자가 프롬프트에 답하기 전에도 온다 — 허용 증거가 아니다.
+                    // 결과 수신(granted) 또는 정책 거부(denied)를 기다린다.
+                    break
                 case .failed(let error):
                     finish(isPolicyDenied(error) ? .denied : .unknown)
                 case .waiting(let error):
@@ -63,15 +65,14 @@ enum LocalNetworkPermission {
                     break
                 }
             }
-            browser.browseResultsChangedHandler = { results, _ in
-                if !results.isEmpty { finish(.granted) }   // 실제 서비스 수신 = 확정 허용
-            }
+            // 결과 수신은 허용 증거가 아니다(실측: LAN TCP 거부 상태에서도 캐시 결과가 온다).
+            // 이 함수는 프롬프트 유발 + 정책 거부 감지용 — 허용 판정은 LanProbe(TCP)가 한다.
             browser.start(queue: .global())
         }
     }
 
     /// NWError에서 로컬 네트워크 정책 거부(kDNSServiceErr_PolicyDenied) 판별.
-    private static func isPolicyDenied(_ error: NWError) -> Bool {
+    static func isPolicyDenied(_ error: NWError) -> Bool {
         if (error as NSError).code == -65570 { return true }
         let text = error.debugDescription
         return text.contains("PolicyDenied") || text.contains("-65570")

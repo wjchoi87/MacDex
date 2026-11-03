@@ -75,6 +75,8 @@ final class AppState {
 
     func start() {
         guard monitorProcess == nil, monitorRestartTask == nil else { return }
+        // 로컬 네트워크 권한 프롬프트를 먼저 유발 — MacDroid가 띄우는 adb 서버는 이 권한을 따른다
+        Task { _ = await LocalNetworkPermission.probe(timeout: 3) }
         cleanupOrphanTrackers()
         startDeviceMonitoring()
         startWirelessSweep()
@@ -145,7 +147,7 @@ final class AppState {
         }
     }
 
-    /// 주기 스윕: 기억한 무선 기기가 목록에 없으면 재접속 시도(폰 쪽 adbd이 살아나면 붙는다).
+    /// 주기 스윕: 기억한 무선 기기가 online이 아니면 재접속 시도(폰 쪽 adbd이 살아나면 붙는다).
     private func startWirelessSweep() {
         guard wirelessSweepTask == nil else { return }
         wirelessSweepTask = Task { @MainActor in
@@ -153,16 +155,9 @@ final class AppState {
                 try? await Task.sleep(for: .seconds(20))
                 guard !isShuttingDown else { return }
                 pruneDeadExternalSessions()  // 사용자가 창을 직접 닫은 고아 세션 정리
-                let hosts = UserDefaults.standard.stringArray(forKey: Self.wirelessHostsKey) ?? []
-                let online = Set(devices.map(\.serial))
-                let missing = hosts.filter { !online.contains($0) }
-                guard !missing.isEmpty else { continue }
-                var restored: [String] = []
-                for host in missing {
-                    if (try? await ADB.connect(host: host)) != nil {
-                        restored.append(host)
-                    }
-                }
+                // 사용자 작업(연결·페어링·복구) 중에는 같은 주소를 동시에 두드리지 않는다
+                guard busyMessage == nil else { continue }
+                let restored = await reconnectRememberedHosts()
                 if !restored.isEmpty {
                     toast = "무선 기기 다시 연결됨: \(restored.joined(separator: ", "))"
                 }
@@ -172,15 +167,38 @@ final class AppState {
 
     /// 감시(재)시작 직후: adb 서버가 재시작되며 무선 연결이 풀렸다면 즉시 한 번 재접속.
     private func reconnectRememberedWirelessHosts() {
+        Task { await reconnectRememberedHosts() }
+    }
+
+    /// 기억한 무선 기기 재접속. 실제로 device 상태가 된 호스트를 돌려준다.
+    /* 변경 전 정책: 목록에 '없는' 주소만 adb connect로 다시 붙였다(출력 문자열 판정).
+       결함: offline으로 남은 전송은 '목록에 있음'으로 보여 영영 재접속되지 않았고, 토글할 때마다
+       바뀌는 무선 디버깅 포트를 계속 두드렸으며, 같은 폰이 다른 포트로 이미 붙어 있어도 중복
+       전송을 만들었다(같은 adbd에 이중 연결 → 끊김 유발).
+       변경 후 정책: online이 아닌 주소만 connectVerified로 재접속(잔류 offline 정리 포함), 같은 IP가
+       이미 online이면 건너뛰고, 'Connection refused'면 바뀐 포트로 보고 기억에서 뺀다. */
+    @discardableResult
+    private func reconnectRememberedHosts() async -> [String] {
         let hosts = UserDefaults.standard.stringArray(forKey: Self.wirelessHostsKey) ?? []
-        let online = Set(devices.map(\.serial))
-        let missing = hosts.filter { !online.contains($0) }
-        guard !missing.isEmpty else { return }
-        Task {
-            for host in missing {
-                _ = try? await ADB.connect(host: host)
+        let online = devices.filter { $0.state == .online }
+        let onlineSerials = Set(online.map(\.serial))
+        let onlineIPs = Set(online.compactMap(\.wirelessIP))
+        var restored: [String] = []
+        var stale: [String] = []
+        for host in hosts where !onlineSerials.contains(host) {
+            if let ip = host.split(separator: ":").first.map(String.init), onlineIPs.contains(ip) { continue }
+            switch await ADB.connectVerified(host: host) {
+            case .online: restored.append(host)
+            case .refused: stale.append(host)
+            default: break
             }
         }
+        if !stale.isEmpty {
+            // 루프 중 새로 기억된 주소를 덮어쓰지 않도록 현재 값을 다시 읽어 뺀다
+            let current = UserDefaults.standard.stringArray(forKey: Self.wirelessHostsKey) ?? []
+            UserDefaults.standard.set(current.filter { !stale.contains($0) }, forKey: Self.wirelessHostsKey)
+        }
+        return restored
     }
 
     /// 앱 종료 시 모든 scrcpy 세션 정리(고아 프로세스 방지).
@@ -210,6 +228,7 @@ final class AppState {
                 d.androidVersion = previous.androidVersion
                 d.sdkInt = previous.sdkInt
                 d.screenSize = previous.screenSize
+                d.serialNo = previous.serialNo
                 if newDevice.state == .online, previous.state != .online || previous.batteryLevel == nil {
                     scheduleDetailFetch(for: d)
                 }
@@ -228,7 +247,9 @@ final class AppState {
 
     /// 무선(ip:port 형태 시리얼) 기기를 기억해 뒀다가 연결이 풀리면 자동 재접속에 쓴다.
     private func rememberWirelessHosts(from snapshot: [Device]) {
-        let hosts = snapshot.map(\.serial).filter { $0.contains(":") }
+        // online으로 확인된 주소만 기억한다 — offline 잔류(실패한 connect의 찌꺼기)를 기억하면
+        // 20초마다 영원히 다시 두드리게 된다(실측: 192.168.0.1:80 offline 잔류).
+        let hosts = snapshot.filter { $0.state == .online }.map(\.serial).filter { $0.contains(":") }
         guard !hosts.isEmpty else { return }
         var saved = UserDefaults.standard.stringArray(forKey: Self.wirelessHostsKey) ?? []
         for host in hosts where !saved.contains(host) {
@@ -449,63 +470,163 @@ final class AppState {
 
     // MARK: 무선 연결
 
-    func pair(host: String, code: String) {
+    /* 변경 전 정책: adb connect/pair 출력 문자열만 보고 성공/실패를 정했고, 실패 원인은 추측 안내였다.
+       결함: offline 잔류 전송에도 "연결됨"이 떴고, LAN 실패의 진짜 원인(adb 서버를 띄운 프로세스에
+       로컬 네트워크 권한 없음)을 구분하지 못해 사용자는 폰만 의심했다.
+       변경 후 정책: connect는 connectVerified로 실제 상태(device)까지 확인한다. 사설 LAN 대상이
+       도달 불가/시간 초과면 앱이 직접 그 ip:port에 TCP로 닿는지 재본다 —
+         · 앱은 닿음 → 서버만 막힌 것 → 서버를 MacDroid 소속으로 재시작하고 1회 재시도
+         · 앱도 권한 거부 → 시스템 설정 안내
+         · 앱도 못 닿음 → 네트워크/주소 문제 안내
+       busyMessage가 있으면 새 시도를 막는다(동시 connect·스윕 경합 방지).
+       영향 범위: 페어링 시트(코드·IP 직접·자동 발견). */
+    func pair(host rawHost: String, code rawCode: String) {
+        let host = rawHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        let code = rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !host.isEmpty, !code.isEmpty else {
             lastError = "주소와 페어링 코드를 입력하세요."
             return
         }
+        guard busyMessage == nil else { return }
+        lastError = nil
         busyMessage = "페어링 중… (12초 안에 안 되면 자동 중단)"
         Task {
-            do {
-                _ = try await ADB.pair(host: host, code: code)
-                busyMessage = nil
-                toast = "페어링 완료. 이제 연결할 수 있습니다."
-            } catch {
-                busyMessage = nil
-                lastError = Self.describeWirelessFailure(action: "페어링", host: host, error: error)
+            var result = await Self.attemptPair(host: host, code: code)
+            if case .failure(let error) = result, Self.isNetworkPairFailure(error), Self.isPrivateLANHost(host) {
+                switch await Self.appReach(host) {
+                case .reachable:
+                    busyMessage = Self.restartingServerMessage
+                    await ADB.restartServer()
+                    result = await Self.attemptPair(host: host, code: code)
+                case .localNetworkDenied:
+                    busyMessage = nil
+                    lastError = Self.localNetworkDeniedMessage
+                    return
+                case .unreachable, nil:
+                    break
+                }
+            }
+            busyMessage = nil
+            switch result {
+            case .success:
+                toast = "페어링 완료 — 이제 '자동 발견' 또는 'IP 직접 연결'로 연결하세요"
+            case .failure(let error):
+                lastError = Self.pairFailureMessage(host: host, error: error)
             }
         }
     }
 
-    func connect(host: String) {
+    func connect(host rawHost: String) {
+        let host = Self.normalizedHost(rawHost)
         guard !host.isEmpty else { return }
-        busyMessage = "연결 중… (8초 안에 안 되면 자동 중단)"
+        guard busyMessage == nil else { return }
+        lastError = nil
+        busyMessage = "연결 중… \(host)"
         Task {
-            do {
-                _ = try await ADB.connect(host: host)
-                busyMessage = nil
-                toast = "\(host) 연결됨"
-            } catch {
-                busyMessage = nil
-                lastError = Self.describeWirelessFailure(action: "연결", host: host, error: error)
+            var outcome = await ADB.connectVerified(host: host)
+            var serverRestarted = false
+            if Self.isLanNetworkFailure(outcome, host: host) {
+                switch await Self.appReach(host) {
+                case .reachable:
+                    busyMessage = Self.restartingServerMessage
+                    await ADB.restartServer()
+                    serverRestarted = true
+                    outcome = await ADB.connectVerified(host: host)
+                case .localNetworkDenied:
+                    busyMessage = nil
+                    lastError = Self.localNetworkDeniedMessage
+                    return
+                case .unreachable, nil:
+                    break
+                }
             }
+            busyMessage = nil
+            report(outcome, host: host, serverRestarted: serverRestarted)
         }
     }
 
-    /* 무선 실패 안내: 타임아웃/거부/로컬네트워크 권한을 구분해 다음 조치를 알려준다.
-       (무한 "연결 중" 방지 — connect 8초, pair 12초 전용 타임아웃).
-       실측: 사설 LAN 대상 "No route to host"는 MacDroid의 로컬 네트워크 권한 차단이
-       원인인 경우가 많다(앱 소속 adb server가 macOS 프라이버시 대상이 됨). */
-    private static func describeWirelessFailure(action: String, host: String, error: Error) -> String {
+    private func report(_ outcome: ADB.ConnectOutcome, host: String, serverRestarted: Bool) {
+        switch outcome {
+        case .online:
+            toast = "\(host) 연결됨"
+        case .unauthorized:
+            lastError = "\(host) — 폰 화면의 'USB 디버깅을 허용하시겠습니까?'에서 '허용'을 누르면 바로 연결됩니다."
+        case .notAuthenticated:
+            lastError = "\(host)에 닿았지만 기기가 인증하지 않았습니다. 무선 디버깅 화면의 포트(5555가 아닌 포트)라면 먼저 '페어링 코드' 탭에서 이 맥을 페어링하세요."
+        case .refused:
+            lastError = "\(host) — 포트가 닫혀 있습니다. 폰의 무선 디버깅 화면에 나온 현재 포트를 확인하세요(무선 디버깅을 다시 켤 때마다 바뀝니다)."
+        case .unreachable, .timedOut:
+            if serverRestarted {
+                lastError = "adb 서버를 MacDroid 권한으로 재시작했지만 \(host)에 여전히 닿지 않습니다. 시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 MacDroid가 켜져 있는지 확인하세요."
+            } else if Self.isPrivateLANHost(host) {
+                lastError = "\(host)에 닿을 수 없습니다 — 폰과 맥이 같은 Wi-Fi인지, 폰 IP가 바뀌지 않았는지 확인하세요."
+            } else {
+                lastError = "\(host) 연결 시간 초과 — 주소·포트를 확인하세요. (VPN이면 폰의 VPN IP:5555, 무선 디버깅 포트는 같은 Wi-Fi에서만 닿습니다)"
+            }
+        case .failed(let raw):
+            lastError = "\(host) 연결 실패: \(raw)"
+        }
+    }
+
+    private static let restartingServerMessage =
+        "adb 서버가 로컬 네트워크에 닿지 못해 MacDroid 권한으로 재시작합니다… (다른 adb 도구의 연결이 잠시 끊깁니다)"
+    private static let localNetworkDeniedMessage =
+        "MacDroid의 로컬 네트워크 접근이 꺼져 있습니다 — 시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 MacDroid를 켜세요."
+
+    /// 포트가 없으면 tcpip 기본 포트(5555)를 붙인다.
+    private static func normalizedHost(_ raw: String) -> String {
+        let host = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !host.isEmpty else { return "" }
+        return host.contains(":") ? host : host + ":5555"
+    }
+
+    /// 사설 LAN 대상의 '도달 불가/시간 초과' — 서버 권한 문제일 수 있는 실패.
+    private static func isLanNetworkFailure(_ outcome: ADB.ConnectOutcome, host: String) -> Bool {
+        switch outcome {
+        case .unreachable, .timedOut: return isPrivateLANHost(host)
+        default: return false
+        }
+    }
+
+    /// 앱 자신이 host(ip:port)에 TCP로 닿는지(파싱 불가면 nil).
+    private static func appReach(_ host: String) async -> LanProbe.Reach? {
+        let parts = host.split(separator: ":")
+        guard parts.count == 2, let port = UInt16(parts[1]) else { return nil }
+        return await LanProbe.tcp(host: String(parts[0]), port: port)
+    }
+
+    private static func attemptPair(host: String, code: String) async -> Result<Void, Error> {
+        do {
+            _ = try await ADB.pair(host: host, code: code)
+            return .success(())
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    /// 네트워크 계열 페어링 실패(코드 오류·거부 제외) — 서버 권한 문제일 수 있다.
+    private static func isNetworkPairFailure(_ error: Error) -> Bool {
+        if case ProcessError.timedOut = error { return true }
+        let text = error.localizedDescription.lowercased()
+        return text.contains("unable to start pairing client") || text.contains("no route")
+            || text.contains("unreachable")
+    }
+
+    private static func pairFailureMessage(host: String, error: Error) -> String {
+        let text = error.localizedDescription.lowercased()
+        if text.contains("wrong password") {
+            return "페어링 코드가 틀렸거나 만료됐습니다 — 폰에서 '페어링 코드로 기기 페어링'을 다시 열고, 새 코드와 새 주소(포트 포함)로 시도하세요."
+        }
         if case ProcessError.timedOut = error {
-            return "\(action) 시간 초과(\(host)) — 주소·포트를 확인하세요. 폰: 개발자 옵션 → 무선 디버깅이 켜져 있고 맥과 같은 네트워크여야 합니다. (VPN으로 붙는 경우 폰의 VPN IP:5555 사용)"
+            return "페어링 시간 초과(\(host)) — 폰의 '기기 페어링' 창이 열려 있는 동안만 주소·코드가 유효합니다. 주소(포트 포함)를 다시 확인하세요."
         }
-        let raw = error.localizedDescription
-        if isLocalNetworkBlock(host: host, message: raw) {
-            return "\(action) 실패(\(host)) — MacDroid의 로컬 네트워크 권한이 차단되었을 수 있습니다.\n시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 MacDroid를 허용한 뒤 다시 시도하세요."
+        if text.contains("refused") {
+            return "\(host) — 페어링 포트가 닫혀 있습니다. 폰의 '기기 페어링' 창을 다시 열어 새 주소를 확인하세요."
         }
-        if raw.contains("cannot connect") || raw.contains("Connection refused") {
-            return "\(action) 실패(\(host)) — 포트가 닫혀 있습니다. 폰의 무선 디버깅 화면에 나온 포트가 맞는지 확인하세요(포트는 다시 열 때마다 바뀝니다)."
+        if isNetworkPairFailure(error) {
+            return "\(host)에 닿을 수 없습니다 — 폰과 맥이 같은 Wi-Fi인지 확인하세요."
         }
-        return "\(action) 실패: \(raw)"
-    }
-
-    /// 사설 LAN 대상 + 도달 불가 계열 메시지 → 로컬 네트워크 권한 차단으로 판정.
-    private static func isLocalNetworkBlock(host: String, message: String) -> Bool {
-        let unreachable = message.contains("No route to host")
-            || message.contains("unreachable")
-            || message.contains("Host is down")
-        return unreachable && isPrivateLANHost(host)
+        return "페어링 실패: \(error.localizedDescription)"
     }
 
     /// 사설 대역(10/8, 172.16/12, 192.168/16, 169.254/16) 판정 — 공인·VPN(100.64/10)은 제외.
@@ -554,7 +675,7 @@ final class AppState {
             } else if devices.contains(where: { $0.state == .online }) {
                 toast = "복구 완료 — USB 기기가 인식되었습니다"
             } else {
-                lastError = "복구 후에도 기기가 보이지 않습니다. 폰에서 확인하세요 — ① USB 알림 → '파일 전송' 모드 선택 ② 개발자 옵션 → 무선 디버깅 켜기 ③ 맥과 같은 Wi-Fi인지 확인"
+                lastError = "복구 후에도 기기가 보이지 않습니다 — ① 폰 USB 알림 → '파일 전송' 모드 ② 폰 개발자 옵션 → 무선 디버깅 켜기 ③ 맥과 같은 Wi-Fi인지 ④ 맥: 시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 MacDroid 켜기"
             }
         }
     }
@@ -582,19 +703,14 @@ final class AppState {
                                              environment: Binaries.processEnvironment)
         }
 
-        // 2) 기억해 둔 무선 기기 재접속
-        var connected: [String] = []
-        for host in UserDefaults.standard.stringArray(forKey: Self.wirelessHostsKey) ?? [] {
-            if (try? await ADB.connect(host: host)) != nil {
-                connected.append(host)
-            }
-        }
+        // 2) 기억해 둔 무선 기기 재접속(실제 device 상태까지 확인)
+        var connected = await reconnectRememberedHosts()
 
-        // 3) mDNS로 지금 발견되는 무선 디버깅 기기도 자동 접속(페어링 대기 서비스는 제외)
+        // 3) 서버 mDNS가 보는 무선 디버깅 기기도 접속(페어링 대기 서비스는 제외)
         if let services = try? await ADB.mdnsServices() {
             for service in services
             where service.name.hasPrefix("무선 디버깅") && !connected.contains(service.address) {
-                if (try? await ADB.connect(host: service.address)) != nil {
+                if await ADB.connectVerified(host: service.address) == .online {
                     connected.append(service.address)
                 }
             }

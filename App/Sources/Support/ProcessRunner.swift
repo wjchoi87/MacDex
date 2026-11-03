@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 struct ProcessResult: Sendable {
     let status: Int32
@@ -22,12 +23,73 @@ enum ProcessError: Error, LocalizedError {
     }
 }
 
+/// GCD 콜백 스레드 사이에서 공유하는 바이트 버퍼(tailLimit이면 마지막 N바이트만 보관).
+final class LockedBuffer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data = Data()
+    private let tailLimit: Int?
+
+    init(tailLimit: Int? = nil) {
+        self.tailLimit = tailLimit
+    }
+
+    func append(_ chunk: Data) {
+        lock.lock()
+        defer { lock.unlock() }
+        data.append(chunk)
+        if let tailLimit, data.count > tailLimit {
+            data.removeFirst(data.count - tailLimit)
+        }
+    }
+
+    var value: Data {
+        lock.lock()
+        defer { lock.unlock() }
+        return data
+    }
+}
+
+/// 여러 스레드에서 호출돼도 한 번만 통과시키는 플래그.
+final class OnceFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var done = false
+
+    /// 처음 호출이면 true.
+    func claim() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if done { return false }
+        done = true
+        return true
+    }
+}
+
+/// 파이프를 GCD readabilityHandler로 EOF까지 비동기 소비한다(콜백은 GCD 스레드).
+private func drainPipe(_ handle: FileHandle,
+                       onChunk: @escaping @Sendable (Data) -> Void,
+                       onEOF: @escaping @Sendable () -> Void) {
+    let eof = OnceFlag()
+    handle.readabilityHandler = { readable in
+        let chunk = readable.availableData
+        if chunk.isEmpty {
+            readable.readabilityHandler = nil
+            if eof.claim() { onEOF() }
+        } else {
+            onChunk(chunk)
+        }
+    }
+}
+
 /// 비동기 프로세스 실행기.
-/// 정책:
-///   1) stdout/stderr를 FileHandle.bytes(비동기 시퀀스)로 동시에 소비한다.
-///      파이프 버퍼(64KB)가 찬 채 한쪽만 동기 읽기하면 교착이 생기는 고전적 함 때문.
-///   2) 모든 실행에 타임아웃이 있다(기본 30초). adb 서버가 일시 멈추면 waitUntilExit가
-///      영원히 묶는 사고를 실측했고, CLI 전체가 멈추는 치명적 결함이라 강제 종료 후 에러.
+/* 변경 전 정책: stdout/stderr를 FileHandle.bytes(AsyncBytes)로 Swift 협조 스레드 풀에서 읽었다.
+   실측 결함: 장기 실행 스트림(adb track-devices 같은 StreamingProcess)이 단 1개만 떠 있어도
+   이후 모든 run()이 영원히 멈췄다(재현: K=0 → 0.04s, K≥1 → 무응답, 타임아웃도 미발화).
+   앱은 항상 track-devices를 띄우므로 connect/pair/자동발견/기기정보 조회가 전부 멈출 수 있었다.
+   변경 후 정책: 협조 풀을 전혀 쓰지 않는다 — GCD readabilityHandler로 두 파이프를 소비하고,
+   종료는 terminationHandler로 받는다. 대기는 GCD 스레드에서만 한다.
+   타임아웃: SIGTERM → 2초 뒤에도 살아 있으면 SIGKILL. 종료 후 남은 출력은 최대 2초만
+   회수한다(손자 프로세스가 파이프를 물고 있어도 호출이 묶이지 않게).
+   영향 범위: ADB/AppCatalog/CLI 등 ProcessRunner·StreamingProcess를 쓰는 모든 경로. */
 enum ProcessRunner {
 
     static func run(
@@ -37,35 +99,12 @@ enum ProcessRunner {
         priority: TaskPriority = .utility,
         timeout: TimeInterval = 30
     ) async throws -> ProcessResult {
-        try await Task.detached(priority: priority) {
-            let process = Process()
-            process.executableURL = executable
-            process.arguments = arguments
-            process.environment = environment ?? ProcessInfo.processInfo.environment
-            let outPipe = Pipe()
-            let errPipe = Pipe()
-            process.standardOutput = outPipe
-            process.standardError = errPipe
-            do { try process.run() } catch {
-                throw ProcessError.launchFailed("\(executable.lastPathComponent): \(error.localizedDescription)")
-            }
-            let killer = TimeoutKiller(process: process)
-            killer.arm(seconds: timeout)
-            defer { killer.cancel() }
-            // 두 파이프를 동시에 소비 후 종료 대기
-            async let out = readAll(outPipe.fileHandleForReading)
-            async let err = readAll(errPipe.fileHandleForReading)
-            let (outData, errData) = try await (out, err)
-            process.waitUntilExit()
-            if killer.didFire {
-                throw ProcessError.timedOut(executable.lastPathComponent, seconds: Int(timeout))
-            }
-            return ProcessResult(
-                status: process.terminationStatus,
-                stdout: String(data: outData, encoding: .utf8) ?? "",
-                stderr: String(data: errData, encoding: .utf8) ?? ""
-            )
-        }.value
+        let raw = try await runOnGCD(executable, arguments, environment, timeout)
+        return ProcessResult(
+            status: raw.status,
+            stdout: String(data: raw.out, encoding: .utf8) ?? "",
+            stderr: String(data: raw.err, encoding: .utf8) ?? ""
+        )
     }
 
     static func runData(
@@ -74,104 +113,143 @@ enum ProcessRunner {
         environment: [String: String]? = nil,
         timeout: TimeInterval = 30
     ) async throws -> Data {
-        try await Task.detached(priority: .utility) {
-            let process = Process()
-            process.executableURL = executable
-            process.arguments = arguments
-            process.environment = environment ?? ProcessInfo.processInfo.environment
-            let outPipe = Pipe()
-            process.standardOutput = outPipe
-            process.standardError = Pipe()
-            do { try process.run() } catch {
-                throw ProcessError.launchFailed("\(executable.lastPathComponent): \(error.localizedDescription)")
-            }
-            let killer = TimeoutKiller(process: process)
-            killer.arm(seconds: timeout)
-            defer { killer.cancel() }
-            let data = try await readAll(outPipe.fileHandleForReading)
-            process.waitUntilExit()
-            if killer.didFire {
-                throw ProcessError.timedOut(executable.lastPathComponent, seconds: Int(timeout))
-            }
-            return data
-        }.value
+        try await runOnGCD(executable, arguments, environment, timeout).out
     }
 
-    /// 타임아웃에 도달하면 프로세스를 강제 종료하는 타이머.
-    private final class TimeoutKiller: @unchecked Sendable {
-        private weak var process: Process?
-        private let lock = NSLock()
-        private var fired = false
-        private var workItem: DispatchWorkItem?
+    private struct RawResult: Sendable {
+        let status: Int32
+        let out: Data
+        let err: Data
+    }
 
-        init(process: Process) {
-            self.process = process
-        }
-
-        var didFire: Bool {
-            lock.lock(); defer { lock.unlock() }
-            return fired
-        }
-
-        func arm(seconds: TimeInterval) {
-            let item = DispatchWorkItem { [weak self] in
-                guard let self else { return }
-                self.lock.lock()
-                self.fired = true
-                let target = self.process
-                self.lock.unlock()
-                if let target, target.isRunning {
-                    target.terminate()
-                }
+    private static func runOnGCD(
+        _ executable: URL,
+        _ arguments: [String],
+        _ environment: [String: String]?,
+        _ timeout: TimeInterval
+    ) async throws -> RawResult {
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                continuation.resume(with: Result {
+                    try runBlocking(executable, arguments, environment, timeout)
+                })
             }
-            lock.lock()
-            workItem = item
-            lock.unlock()
-            DispatchQueue.global().asyncAfter(deadline: .now() + seconds, execute: item)
-        }
-
-        func cancel() {
-            lock.lock()
-            workItem?.cancel()
-            workItem = nil
-            lock.unlock()
         }
     }
 
-    private static func readAll(_ handle: FileHandle) async throws -> Data {
-        var data = Data()
-        for try await byte in handle.bytes {
-            data.append(byte)
+    /// GCD 스레드 전용 — 협조 스레드에서 호출하지 말 것.
+    private static func runBlocking(
+        _ executable: URL,
+        _ arguments: [String],
+        _ environment: [String: String]?,
+        _ timeout: TimeInterval
+    ) throws -> RawResult {
+        let process = Process()
+        process.executableURL = executable
+        process.arguments = arguments
+        process.environment = environment ?? ProcessInfo.processInfo.environment
+        process.standardInput = FileHandle.nullDevice
+        let outPipe = Pipe()
+        let errPipe = Pipe()
+        process.standardOutput = outPipe
+        process.standardError = errPipe
+
+        let out = LockedBuffer()
+        let err = LockedBuffer()
+        let pipesClosed = DispatchGroup()
+        pipesClosed.enter()
+        pipesClosed.enter()
+        let exited = DispatchSemaphore(value: 0)
+
+        let outHandle = outPipe.fileHandleForReading
+        let errHandle = errPipe.fileHandleForReading
+        drainPipe(outHandle, onChunk: { out.append($0) }, onEOF: { pipesClosed.leave() })
+        drainPipe(errHandle, onChunk: { err.append($0) }, onEOF: { pipesClosed.leave() })
+        process.terminationHandler = { _ in exited.signal() }
+
+        do {
+            try process.run()
+        } catch {
+            outHandle.readabilityHandler = nil
+            errHandle.readabilityHandler = nil
+            throw ProcessError.launchFailed("\(executable.lastPathComponent): \(error.localizedDescription)")
         }
-        return data
+
+        var timedOut = false
+        if exited.wait(timeout: .now() + timeout) == .timedOut {
+            timedOut = true
+            let pid = process.processIdentifier
+            process.terminate()
+            if exited.wait(timeout: .now() + 2) == .timedOut {
+                kill(pid, SIGKILL)
+                _ = exited.wait(timeout: .now() + 2)
+            }
+        }
+        // 종료 후 파이프 잔여 출력 회수 — 손자 프로세스가 fd를 물고 있어도 최대 2초만 기다린다
+        _ = pipesClosed.wait(timeout: .now() + 2)
+        outHandle.readabilityHandler = nil
+        errHandle.readabilityHandler = nil
+
+        if timedOut {
+            throw ProcessError.timedOut(executable.lastPathComponent, seconds: Int(timeout))
+        }
+        return RawResult(status: process.terminationStatus, out: out.value, err: err.value)
+    }
+}
+
+/// 개행 단위 분할기(GCD 콜백 간 공유).
+private final class LineSplitter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var pending = Data()
+
+    func feed(_ chunk: Data, _ emit: (String) -> Void) {
+        lock.lock()
+        pending.append(chunk)
+        var lines: [String] = []
+        while let newline = pending.firstIndex(of: 0x0A) {
+            let lineData = pending.subdata(in: pending.startIndex..<newline)
+            pending.removeSubrange(pending.startIndex...newline)
+            lines.append(String(data: lineData, encoding: .utf8) ?? "")
+        }
+        lock.unlock()
+        lines.forEach(emit)
+    }
+
+    func flush(_ emit: (String) -> Void) {
+        lock.lock()
+        let rest = pending
+        pending.removeAll()
+        lock.unlock()
+        if !rest.isEmpty { emit(String(data: rest, encoding: .utf8) ?? "") }
     }
 }
 
 /// 장기 실행 프로세스(adb track-devices, scrcpy 등) 래퍼.
 /// 라인 스트리밍 + 원시 바이트 스트리밍 + 종료 감지 콜백 + stderr 꼬리 캡처 제공.
+/* 정책: ProcessRunner와 같은 이유로 협조 스레드 풀(AsyncBytes)을 쓰지 않는다 — GCD
+   readabilityHandler + terminationHandler. 종료 통지(onExit)는 stdout EOF가 아니라 프로세스
+   종료에 묶는다(EOF는 최대 1초만 기다림) — 손자 프로세스가 stdout을 물고 있어도 세션 정리와
+   감시 재시작이 반드시 일어나게. terminate()는 SIGTERM 후 2초 뒤 SIGKILL로 확실히 끝낸다. */
 final class StreamingProcess: @unchecked Sendable {
     private let process = Process()
-    private let queue = DispatchQueue(label: "macdroid.streaming-process")
+    private let lock = NSLock()
     private var terminated = false
 
     // stderr 마지막 2KB — 프로세스가 조기 사망했을 때 원인을 사용자에게 보여 주기 위함.
-    private var errTail = Data()
-    private let errLock = NSLock()
+    private let errTail = LockedBuffer(tailLimit: 2048)
 
     /// 캡처된 stderr 마지막 부분(실패 진단용).
     var stderrTail: String {
-        errLock.lock(); defer { errLock.unlock() }
-        return String(data: errTail, encoding: .utf8) ?? ""
+        String(data: errTail.value, encoding: .utf8) ?? ""
     }
 
     /// 프로세스가 아직 살아 있는지(조기 사망 감지용 폴링).
     var isRunning: Bool { process.isRunning }
 
-    private func appendErrTail(_ byte: UInt8) {
-        errLock.lock()
-        if errTail.count > 2048 { errTail.removeFirst(errTail.count - 2048) }
-        errTail.append(byte)
-        errLock.unlock()
+    private var isTerminated: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return terminated
     }
 
     /// stdout을 한 줄씩 전달(개행 제거).
@@ -182,41 +260,15 @@ final class StreamingProcess: @unchecked Sendable {
         onLine: (@Sendable (String) -> Void)? = nil,
         onExit: (@Sendable (Int32) -> Void)? = nil
     ) throws {
-        process.executableURL = executable
-        process.arguments = arguments
-        process.environment = environment ?? ProcessInfo.processInfo.environment
-        let outPipe = Pipe()
-        let errPipe = Pipe()
-        process.standardOutput = outPipe
-        process.standardError = errPipe
-        try process.run()
-
-        // stderr는 항상 소비 — 두고 않으면 파이프가 차서 자식이 막힌다(마지막 2KB 보관).
-        Task.detached(priority: .utility) { [weak self] in
-            for try await byte in errPipe.fileHandleForReading.bytes {
-                self?.appendErrTail(byte)
-            }
-        }
-
-        let stdout = outPipe.fileHandleForReading
+        var chunkHandler: (@Sendable (Data) -> Void)?
+        var eofHandler: (@Sendable () -> Void)?
         if let onLine {
-            Task.detached(priority: .utility) { [weak self] in
-                for try await line in stdout.bytes.lines {
-                    guard let self, !self.isTerminated else { break }
-                    onLine(String(line))
-                }
-                guard let self else { return }
-                self.process.waitUntilExit()
-                onExit?(self.process.terminationStatus)
-            }
-        } else {
-            Task.detached(priority: .utility) { [weak self] in
-                for try await _ in stdout.bytes {}
-                guard let self else { return }
-                self.process.waitUntilExit()
-                onExit?(self.process.terminationStatus)
-            }
+            let splitter = LineSplitter()
+            chunkHandler = { chunk in splitter.feed(chunk, onLine) }
+            eofHandler = { splitter.flush(onLine) }
         }
+        try launch(executable, arguments, environment,
+                   onChunk: chunkHandler, onStdoutEOF: eofHandler, onExit: onExit)
     }
 
     /// stdout을 1바이트씩 전달 — 길이 프리픽스 같은 바이너리 프로토콜 파싱용.
@@ -227,41 +279,74 @@ final class StreamingProcess: @unchecked Sendable {
         onByte: @escaping @Sendable (UInt8) -> Void,
         onExit: (@Sendable (Int32) -> Void)? = nil
     ) throws {
+        try launch(
+            executable, arguments, environment,
+            onChunk: { chunk in chunk.forEach(onByte) },
+            onStdoutEOF: nil,
+            onExit: onExit
+        )
+    }
+
+    private func launch(
+        _ executable: URL,
+        _ arguments: [String],
+        _ environment: [String: String]?,
+        onChunk: (@Sendable (Data) -> Void)?,
+        onStdoutEOF: (@Sendable () -> Void)?,
+        onExit: (@Sendable (Int32) -> Void)?
+    ) throws {
         process.executableURL = executable
         process.arguments = arguments
         process.environment = environment ?? ProcessInfo.processInfo.environment
+        process.standardInput = FileHandle.nullDevice
         let outPipe = Pipe()
         let errPipe = Pipe()
         process.standardOutput = outPipe
         process.standardError = errPipe
-        try process.run()
 
-        Task.detached(priority: .utility) { [weak self] in
-            for try await byte in errPipe.fileHandleForReading.bytes {
-                self?.appendErrTail(byte)
+        let outHandle = outPipe.fileHandleForReading
+        let errHandle = errPipe.fileHandleForReading
+        let stdoutClosed = DispatchSemaphore(value: 0)
+        let tail = errTail
+
+        drainPipe(outHandle, onChunk: { [weak self] chunk in
+            guard let self, !self.isTerminated else { return }
+            onChunk?(chunk)
+        }, onEOF: {
+            onStdoutEOF?()
+            stdoutClosed.signal()
+        })
+        drainPipe(errHandle, onChunk: { tail.append($0) }, onEOF: {})
+
+        process.terminationHandler = { finished in
+            let status = finished.terminationStatus
+            DispatchQueue.global(qos: .utility).async {
+                _ = stdoutClosed.wait(timeout: .now() + 1)
+                outHandle.readabilityHandler = nil
+                errHandle.readabilityHandler = nil
+                onExit?(status)
             }
         }
 
-        let stdout = outPipe.fileHandleForReading
-        Task.detached(priority: .utility) { [weak self] in
-            for try await byte in stdout.bytes {
-                guard let self, !self.isTerminated else { break }
-                onByte(byte)
-            }
-            guard let self else { return }
-            self.process.waitUntilExit()
-            onExit?(self.process.terminationStatus)
+        do {
+            try process.run()
+        } catch {
+            outHandle.readabilityHandler = nil
+            errHandle.readabilityHandler = nil
+            throw error
         }
-    }
-
-    private var isTerminated: Bool {
-        queue.sync { terminated }
     }
 
     func terminate() {
-        queue.sync { terminated = true }
-        if process.isRunning {
-            process.terminate()
+        lock.lock()
+        terminated = true
+        lock.unlock()
+        guard process.isRunning else { return }
+        let pid = process.processIdentifier
+        process.terminate()
+        // SIGTERM을 무시하면 2초 뒤 SIGKILL — 창/감시가 안 닫히는 사고 방지
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 2) { [weak self] in
+            if self?.process.isRunning == true { kill(pid, SIGKILL) }
         }
     }
 }

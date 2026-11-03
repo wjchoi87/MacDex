@@ -63,8 +63,9 @@ enum Binaries {
             env["SCRCPY_SERVER_PATH"] = scrcpyServer.path
         }
         env["ADB"] = adb.path
-        // adb가 사용자 home 기반 key를 찾도록(무선 페어링 키 저장 위치)
-        if env["ANDROID_SDK_HOME"] == nil { env["ANDROID_SDK_HOME"] = appSupport.path }
+        /* 변경 전: ANDROID_SDK_HOME을 앱 지원 폴더로 덮어썼다("페어링 키 위치"라는 잘못된 전제).
+           실측: adb 35는 이 값을 키 경로로 쓰지 않고 항상 ~/.android/adbkey를 쓴다. 쓸모는 없고
+           터미널/Android Studio가 띄운 서버와 환경만 어긋나게 해 제거했다(같은 키·같은 서버 공유). */
         return env
     }
 

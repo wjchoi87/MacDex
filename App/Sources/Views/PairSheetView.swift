@@ -17,8 +17,7 @@ struct PairSheetView: View {
     @State private var pairHost = ""
     @State private var pairCode = ""
     @State private var connectHost = ""
-    @State private var mdnsServices: [MdnsService] = []
-    @State private var networkStatus: LocalNetworkStatus = .unknown
+    @State private var discovery = LanDiscovery()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -153,24 +152,30 @@ struct PairSheetView: View {
 
     // MARK: mDNS
 
+    /* 정책: 목록은 앱 자신의 Bonjour 탐색(LanDiscovery) 결과다 — adb 서버 mDNS는 서버를 누가
+       띄웠는지에 따라 비어 있을 수 있어(실측) 쓰지 않는다. 같은 폰이 이미 다른 전송
+       (USB·Tailscale·LAN)으로 붙어 있으면 '연결됨'으로 표시해 중복 연결을 만들지 않는다. */
     private var mdnsTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("같은 네트워크에서 발견된 기기")
+                Text("같은 Wi-Fi에서 발견된 기기")
                     .font(.headline)
+                if discovery.isBrowsing {
+                    ProgressView().controlSize(.small)
+                }
                 Spacer()
                 Button {
-                    Task { await reloadMdns() }
+                    discovery.restart()
                 } label: {
                     Image(systemName: "arrow.clockwise")
                 }
                 .help("다시 찾기")
             }
 
-            if mdnsServices.isEmpty {
+            if discovery.services.isEmpty {
                 VStack(spacing: 8) {
                     // 권한 거부가 확인되면 이것이 1순위 원인 — 폰 안내보다 먼저 보여준다(실측 사례)
-                    if networkStatus == .denied {
+                    if discovery.permission == .denied {
                         Image(systemName: "network.badge.shield.half.filled")
                             .font(.largeTitle)
                             .foregroundStyle(.orange)
@@ -186,7 +191,7 @@ struct PairSheetView: View {
                         .buttonStyle(.borderedProminent)
                         .padding(.top, 4)
                         Button {
-                            Task { await probeAndReload() }
+                            discovery.restart()
                         } label: {
                             Text("권한을 허용한 뒤 다시 검색")
                         }
@@ -194,7 +199,7 @@ struct PairSheetView: View {
                         Image(systemName: "wifi.router")
                             .font(.largeTitle)
                             .foregroundStyle(.tertiary)
-                        Text("발견된 기기가 없습니다.\n폰에서 무선 디버깅을 켜고 맥과 같은 Wi-Fi에 연결하세요.")
+                        Text("찾는 중… 기기가 보이지 않으면\n폰에서 무선 디버깅을 켜고 맥과 같은 Wi-Fi에 연결하세요.")
                             .multilineTextAlignment(.center)
                             .font(.callout)
                             .foregroundStyle(.secondary)
@@ -210,39 +215,66 @@ struct PairSheetView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(mdnsServices) { service in
+                List(discovery.services) { service in
                     HStack {
-                        Image(systemName: "iphone.radiowaves.left.and.right")
+                        Image(systemName: service.kind == .pairing
+                              ? "key.radiowaves.forward" : "iphone.radiowaves.left.and.right")
                             .foregroundStyle(.tint)
-                        Text(service.name)
-                        Spacer()
-                        Button("연결") {
-                            appState.connect(host: service.address)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(serviceTitle(service))
+                            Text(service.address)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .monospaced()
                         }
-                        .disabled(isBusy)
+                        Spacer()
+                        switch service.kind {
+                        case .connect:
+                            if isAlreadyConnected(service) {
+                                Label("연결됨", systemImage: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                                    .font(.callout)
+                            } else {
+                                Button("연결") {
+                                    appState.connect(host: service.address)
+                                }
+                                .disabled(isBusy)
+                            }
+                        case .pairing:
+                            // 페어링 포트는 창을 열 때마다 바뀐다 — 주소를 채워 코드 탭으로 보낸다
+                            Button("코드 입력") {
+                                pairHost = service.address
+                                tab = .code
+                            }
+                        }
                     }
                 }
                 .listStyle(.inset)
             }
         }
         .padding(24)
-        .task {
-            await probeAndReload()
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(5))
-                await reloadMdns()
-            }
+        .onAppear { discovery.start() }
+        .onDisappear { discovery.stop() }
+    }
+
+    private func serviceTitle(_ service: LanDiscovery.Service) -> String {
+        let name = matchingDevice(service)?.displayModel ?? service.deviceSerial ?? service.instance
+        return service.kind == .pairing ? "\(name) · 페어링 대기" : "\(name) · 무선 디버깅"
+    }
+
+    /// 같은 폰이 이미 online인지(시리얼·주소·mDNS 자동연결 이름 기준).
+    private func matchingDevice(_ service: LanDiscovery.Service) -> Device? {
+        appState.devices.first { device in
+            device.state == .online && (
+                device.serial == service.address
+                || device.serial.hasPrefix(service.instance)
+                || (service.deviceSerial != nil && device.serialNo == service.deviceSerial)
+            )
         }
     }
 
-    /// 권한 점검(Bonjour 탐색으로 프롬프트 유발) 후 목록 갱신.
-    private func probeAndReload() async {
-        networkStatus = await LocalNetworkPermission.probe()
-        await reloadMdns()
-    }
-
-    private func reloadMdns() async {
-        mdnsServices = (try? await ADB.mdnsServices()) ?? []
+    private func isAlreadyConnected(_ service: LanDiscovery.Service) -> Bool {
+        matchingDevice(service) != nil
     }
 
     /// 진행 중(페어링/연결/전환)이면 액션 버튼 잠금 — 중복 실행 방지.

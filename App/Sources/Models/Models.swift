@@ -15,11 +15,22 @@ struct Device: Identifiable, Equatable, Sendable, Hashable {
     var batteryLevel: Int?
     var isCharging: Bool?
     var screenSize: String?
+    /// 기기 고유 시리얼(ro.serialno) — 같은 폰이 여러 전송(USB·Tailscale·LAN)으로 붙었는지 판별용.
+    var serialNo: String?
 
     var id: String { serial }
 
-    var isUSB: Bool { !serial.contains(":") }
+    /* 변경 전: ':'가 없으면 USB로 봤다 → adb가 mDNS로 자동 연결한 무선 기기
+       ("adb-<serial>-<id>._adb-tls-connect._tcp")가 USB로 표시되고 '무선으로 전환'이 떴다.
+       변경 후: mDNS 서비스 이름(._tcp)도 무선으로 분류한다. */
+    var isUSB: Bool { !serial.contains(":") && !serial.hasSuffix("._tcp") }
     var displayModel: String { model ?? serial }
+
+    /// ip:port 시리얼의 IP 부분(그 외 nil).
+    var wirelessIP: String? {
+        guard serial.contains(":") else { return nil }
+        return serial.split(separator: ":").first.map(String.init)
+    }
 
     /// CGNAT 대역(100.64/10 — Tailscale 등 VPN)으로 연결된 무선 기기인지.
     /// 자동발견(mDNS)이 안 되는 환경 안내에 사용(실측: VPN 연결은 mDNS 멀티캐스트가 못 넘어옴).
