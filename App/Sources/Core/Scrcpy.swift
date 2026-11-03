@@ -54,12 +54,12 @@ struct ScrcpySession: Identifiable, @unchecked Sendable {
         process?.terminate()
     }
 
-    /// 프로세스가 아직 살아 있는지(고아 세션용 — kill(pid,0) 검사).
+    /// 프로세스가 아직 살아 있는지(고아: kill(pid,0), 소유: Process.isRunning).
     var isProcessAlive: Bool {
         if let pid = externalPID { return kill(pid, 0) == 0 }
         processLock.lock()
         defer { processLock.unlock() }
-        return process != nil
+        return process?.isRunning ?? false
     }
 }
 

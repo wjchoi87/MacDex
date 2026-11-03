@@ -382,19 +382,19 @@ final class AppState {
 
     func stopSession(_ session: ScrcpySession) {
         session.terminate()
-        // 고아 입양 세션은 onExit 이벤트가 없으므로 여기서 직접 목록 정리
-        if session.externalPID != nil {
-            sessions.removeAll { $0.key == session.key }
-            endStayAwakeIfLast(serial: session.deviceSerial)
-        }
+        /* 변경 전 정책: 소유 세션은 onExit 이벤트가 오면 제거했다 — 실사용 보고에서
+           창은 닫히는데 목록 항목이 남고 재클릭도 무반응이었다(이벤트 경로가 컨텍스트에
+           따라 끊기는 사례). 변경 후 정책: 닫기는 즉시 목록에서 제거한다(이중 제거 무해).
+           onExit는 사용자가 창을 직접 닫은 경우의 정리 경로로만 쓴다. */
+        sessions.removeAll { $0.key == session.key }
+        endStayAwakeIfLast(serial: session.deviceSerial)
     }
 
     func stopSessions(for serial: String) {
         for session in sessions where session.deviceSerial == serial {
             session.terminate()
         }
-        // 고아 입양분 즉시 정리(일반 세션은 onExit가 지운다)
-        sessions.removeAll { $0.deviceSerial == serial && $0.externalPID != nil }
+        sessions.removeAll { $0.deviceSerial == serial }
         endStayAwakeIfLast(serial: serial)
     }
 
@@ -474,9 +474,10 @@ final class AppState {
         }
     }
 
-    /// 고아 입양 세션 중 프로세스가 죽은 것(사용자가 창을 직접 닫은 경우)을 목록에서 제거.
+    /// 죽은 세션 정리 — 고아 입양분뿐 아니라 onExit가 늦거나 안 온 소유 세션도
+    /// 프로세스가 죽었으면 제거한다(20초 주기 안전망).
     private func pruneDeadExternalSessions() {
-        let dead = sessions.filter { $0.externalPID != nil && !$0.isProcessAlive }
+        let dead = sessions.filter { !$0.isProcessAlive }
         guard !dead.isEmpty else { return }
         let deadKeys = Set(dead.map(\.key))
         sessions.removeAll { deadKeys.contains($0.key) }

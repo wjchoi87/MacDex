@@ -266,9 +266,12 @@ enum ADB {
     private static let dexLauncherComponent = "com.sec.android.app.launcher/com.honeyspace.dexservice.SecondaryLauncher"
 
     /// 기기가 DeX 데스크톱을 지원하는지(삼성 폰/태블릿).
+    /* 정책: 제조사 정보가 아직 안 들어왔으면(상세 로딩 전) 지원으로 간주한다 —
+       버튼이 계속 비활성으로 보이는 불만(실사용 보고)이 로딩 전 판정 때문일 수 있어서.
+       비삼성으로 판명되면 실행 시 안내 에러가 뜬다(launchDexDesktop 가드). */
     static func supportsDexDesktop(_ device: Device) -> Bool {
         let maker = (device.manufacturer ?? device.brand ?? "").lowercased()
-        return maker.contains("samsung")
+        return maker.isEmpty || maker.contains("samsung")
     }
 
     /// 새로 생긴 가상 디스플레이 id를 폴링으로 찾는다.
