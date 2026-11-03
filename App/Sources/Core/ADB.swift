@@ -21,7 +21,8 @@ enum ADB {
        페이로드는 "serial\tstate\n..." 전체 목록 스냅샷(비면 기기 0대).
        이전 정책: 라인 단위 파싱 → 첫 시리얼이 프리픽스에 오염되고 해제 감지 불가.
        변경 후 정책: 바이트 스트리밍에서 프레임을 조립해 매 이벤트 전체 스냅샷으로 대체. */
-    static func trackDevices(onUpdate: @escaping @Sendable ([Device]) -> Void) async throws -> StreamingProcess {
+    static func trackDevices(onUpdate: @escaping @Sendable ([Device]) -> Void,
+                             onExit: (@Sendable (Int32) -> Void)? = nil) async throws -> StreamingProcess {
         final class FrameBuffer: @unchecked Sendable {
             var buffer = Data()
             let lock = NSLock()
@@ -48,7 +49,7 @@ enum ADB {
         }
         let frames = FrameBuffer()
         let process = StreamingProcess()
-        try process.startByteStream(executable: Binaries.adb, arguments: ["track-devices"], environment: env) { byte in
+        try process.startByteStream(executable: Binaries.adb, arguments: ["track-devices"], environment: env, onByte: { byte in
             frames.lock.lock()
             frames.buffer.append(byte)
             frames.lock.unlock()
@@ -65,7 +66,7 @@ enum ADB {
                 }
                 onUpdate(devices.sorted { $0.serial < $1.serial })
             }
-        }
+        }, onExit: onExit)
         return process
     }
 

@@ -25,10 +25,16 @@ final class AppState {
     var hasRunningSession: Bool { !sessions.isEmpty }
 
     private var monitorProcess: StreamingProcess?
+    private var monitorRestartTask: Task<Void, Never>?
+    private var wirelessSweepTask: Task<Void, Never>?
+    private var isShuttingDown = false
     private var detailTasks: [String: Task<Void, Never>] = [:]
 
     /// 기기별 절전 방지(stay_on) 이전값 — DeX/미러 세션 동안 기기가 잠들지 않게 했다가 복구.
     private var stayOnSaved: [String: Int] = [:]
+
+    /// 이전에 봤던 무선(ip:port) 기기 주소 — adb 서버 재시작으로 연결이 풀려도 자동 재접속한다.
+    private static let wirelessHostsKey = "MacDroid.rememberedWirelessHosts"
 
     /// 세션이 시작될 때: 이 기기의 첫 세션이면 절전 방지를 켜고 이전값을 저장.
     private func beginStayAwakeIfNeeded(serial: String) {
@@ -62,26 +68,101 @@ final class AppState {
     // MARK: 시작/종료
 
     func start() {
-        guard monitorProcess == nil else { return }
+        guard monitorProcess == nil, monitorRestartTask == nil else { return }
+        startDeviceMonitoring()
+        startWirelessSweep()
+    }
+
+    /* 정책: adb 서버는 Mac의 다른 adb 클라이언트(홈브루/SDK 등)와 공유된다. 버전이 다른
+       클라이언트가 실행되면 서버가 죽었다 재시작되고, 이 앱의 track-devices도 함께 죽는다.
+       예전엔 이때 앱을 재시작해야 했다(실측 — 기기 목록이 멈추고 '자동 검색 안 됨'으로 보임).
+       이제 감시가 죽으면 1초 뒤 스스로 되살리고, 서버 재시작으로 풀린 무선 연결도
+       기억해 둔 주소로 자동 재접속한다. */
+    private func startDeviceMonitoring() {
         Task {
-            // adb 서버 기동(첫 실행 지연 방지) 후 감시 시작
+            // adb 서버 기동(첫 실행 지연 방지 + 다른 클라이언트가 죽인 경우 부활)
             _ = try? await ProcessRunner.run(
                 Binaries.adb, arguments: ["start-server"], environment: Binaries.processEnvironment
             )
             do {
-                monitorProcess = try await ADB.trackDevices { [weak self] snapshot in
-                    Task { @MainActor in
-                        self?.applyDeviceSnapshot(snapshot)
+                monitorProcess = try await ADB.trackDevices(
+                    onUpdate: { [weak self] snapshot in
+                        Task { @MainActor in
+                            self?.applyDeviceSnapshot(snapshot)
+                        }
+                    },
+                    onExit: { [weak self] _ in
+                        Task { @MainActor in
+                            self?.handleMonitorExit()
+                        }
+                    }
+                )
+                reconnectRememberedWirelessHosts()
+            } catch {
+                lastError = "기기 감시 시작 실패: \(error.localizedDescription)"
+                scheduleMonitorRestart()
+            }
+        }
+    }
+
+    private func handleMonitorExit() {
+        monitorProcess = nil
+        guard !isShuttingDown else { return }
+        scheduleMonitorRestart()
+    }
+
+    private func scheduleMonitorRestart() {
+        guard monitorRestartTask == nil else { return }
+        monitorRestartTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1))
+            monitorRestartTask = nil
+            guard !isShuttingDown else { return }
+            startDeviceMonitoring()
+        }
+    }
+
+    /// 주기 스윕: 기억한 무선 기기가 목록에 없으면 재접속 시도(폰 쪽 adbd이 살아나면 붙는다).
+    private func startWirelessSweep() {
+        guard wirelessSweepTask == nil else { return }
+        wirelessSweepTask = Task { @MainActor in
+            while !Task.isCancelled, !isShuttingDown {
+                try? await Task.sleep(for: .seconds(20))
+                guard !isShuttingDown else { return }
+                let hosts = UserDefaults.standard.stringArray(forKey: Self.wirelessHostsKey) ?? []
+                let online = Set(devices.map(\.serial))
+                let missing = hosts.filter { !online.contains($0) }
+                guard !missing.isEmpty else { continue }
+                var restored: [String] = []
+                for host in missing {
+                    if (try? await ADB.connect(host: host)) != nil {
+                        restored.append(host)
                     }
                 }
-            } catch {
-                self.lastError = "기기 감시 시작 실패: \(error.localizedDescription)"
+                if !restored.isEmpty {
+                    toast = "무선 기기 다시 연결됨: \(restored.joined(separator: ", "))"
+                }
+            }
+        }
+    }
+
+    /// 감시(재)시작 직후: adb 서버가 재시작되며 무선 연결이 풀렸다면 즉시 한 번 재접속.
+    private func reconnectRememberedWirelessHosts() {
+        let hosts = UserDefaults.standard.stringArray(forKey: Self.wirelessHostsKey) ?? []
+        let online = Set(devices.map(\.serial))
+        let missing = hosts.filter { !online.contains($0) }
+        guard !missing.isEmpty else { return }
+        Task {
+            for host in missing {
+                _ = try? await ADB.connect(host: host)
             }
         }
     }
 
     /// 앱 종료 시 모든 scrcpy 세션 정리(고아 프로세스 방지).
     func shutdownAll() {
+        isShuttingDown = true
+        monitorRestartTask?.cancel()
+        wirelessSweepTask?.cancel()
         for session in sessions {
             session.terminate()
         }
@@ -117,6 +198,19 @@ final class AppState {
         }
         // 사라진 기기의 세션은 scrcpy가 스스로 종료함(onExit → removeSession). 여기선 상태만 정리.
         devices = merged
+        rememberWirelessHosts(from: merged)
+    }
+
+    /// 무선(ip:port 형태 시리얼) 기기를 기억해 뒀다가 연결이 풀리면 자동 재접속에 쓴다.
+    private func rememberWirelessHosts(from snapshot: [Device]) {
+        let hosts = snapshot.map(\.serial).filter { $0.contains(":") }
+        guard !hosts.isEmpty else { return }
+        var saved = UserDefaults.standard.stringArray(forKey: Self.wirelessHostsKey) ?? []
+        for host in hosts where !saved.contains(host) {
+            saved.append(host)
+        }
+        if saved.count > 8 { saved = Array(saved.suffix(8)) }  // 최근 것 위주로 상한
+        UserDefaults.standard.set(saved, forKey: Self.wirelessHostsKey)
     }
 
     private func scheduleDetailFetch(for device: Device) {
