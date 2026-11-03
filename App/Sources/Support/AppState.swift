@@ -293,17 +293,25 @@ final class AppState {
     }
 
     /// DeX 데스크톱 전체(가상 디스플레이 + 삼성 SecondaryLauncher).
-    /* 정책: 미러와 같은 규칙 — 기기당 DeX 데스크톱 창은 1개. 다시 누르면 기존 창을
-       종료하고 새로 띄운다. 디스플레이 생성은 비동기(scrcpy 서버 푸시)이므로,
-       실행 전 디스플레이 목록을 저장해 두고 새 id가 생기면 그 위에 DeX 런처를 올린다. */
+    /* 변경 전 정책: 클릭 즉시 피드백이 없고, adb 서버 고착 등으로 scrcpy가 조기 사망하면
+       8초 뒤 하단 배너에만 실패가 떠서 "반응 없음"으로 느껴졌다(실측 사례).
+       변경 후 정책: 클릭 즉시 진행 배너, 프로세스 조기 사망을 즉시 감지(stderr 원인 포함),
+       연결 실패로 죽었으면 연결 복구를 돌리고 자동으로 1회 재시도한다.
+       영향 범위: DeX 데스크톱 실행 경로(미러·앱 창은 기존 정책 유지). */
     func launchDexDesktop(for device: Device) {
         guard ADB.supportsDexDesktop(device) else {
             lastError = "DeX 데스크톱은 Samsung(DeX 지원) 기기에서 사용할 수 있습니다."
             return
         }
+        launchDexDesktopAttempt(for: device, allowRecovery: true)
+    }
+
+    private func launchDexDesktopAttempt(for device: Device, allowRecovery: Bool) {
         let existing = sessions.first { $0.deviceSerial == device.serial && $0.mode == .dex }
         existing?.terminate()
+        sessions.removeAll { $0.id == Scrcpy.makeID(serial: device.serial, mode: .dex, package: nil) }
 
+        busyMessage = "DeX 데스크톱 시작 중…"  // 클릭 즉시 피드백
         var session = ScrcpySession(
             id: Scrcpy.makeID(serial: device.serial, mode: .dex, package: nil),
             deviceSerial: device.serial,
@@ -323,16 +331,40 @@ final class AppState {
                 sessions.removeAll { $0.id == session.id }
                 sessions.append(session)
 
-                // 디스플레이가 생기면 DeX 런처를 올린다. 못 찾으면 창을 정리하고 안내.
-                guard let displayId = await ADB.newDisplayId(serial: device.serial, excluding: before) else {
-                    if sessions.contains(where: { $0.key == session.key }) {
-                        session.terminate()
-                        lastError = "DeX 디스플레이를 만들지 못했습니다. 잠시 후 다시 시도하세요."
+                // 디스플레이 생성 대기 — 프로세스가 죽으면 즉시 중단(타임아웃까지 기다리지 않음)
+                var displayId: Int?
+                let deadline = Date().addingTimeInterval(12)
+                while Date() < deadline {
+                    if !process.isRunning { break }  // 조기 사망
+                    if let ids = try? await ADB.displayIds(serial: device.serial),
+                       let fresh = ids.first(where: { !before.contains($0) && $0 != 0 }) {
+                        displayId = fresh
+                        break
                     }
+                    try? await Task.sleep(for: .milliseconds(400))
+                }
+
+                if let displayId {
+                    try await ADB.startDexLauncher(serial: device.serial, displayId: displayId)
+                    busyMessage = nil
                     return
                 }
-                try await ADB.startDexLauncher(serial: device.serial, displayId: displayId)
+
+                // 실패 — 세션 정리하고 원인 안내
+                session.terminate()
+                sessions.removeAll { $0.key == session.key }
+                busyMessage = nil
+                let reason = process.stderrTail.split(separator: "\n").last.map(String.init) ?? ""
+                if allowRecovery {
+                    busyMessage = "연결이 불안정해 복구 후 다시 시도합니다…"
+                    _ = await performRecovery()
+                    busyMessage = nil
+                    launchDexDesktopAttempt(for: device, allowRecovery: false)
+                } else {
+                    lastError = "DeX 데스크톱 실행 실패\(reason.isEmpty ? "" : " — \(reason)")\n폰 쪽에서 무선 디버깅이 켜져 있는지 확인하고 다시 시도하세요."
+                }
             } catch {
+                busyMessage = nil
                 lastError = "DeX 데스크톱 실행 실패: \(error.localizedDescription)"
             }
         }
@@ -515,40 +547,13 @@ final class AppState {
     /// 원클릭 연결 복구(초보자용): adb 서버 재시작 → 기억된 무선 재접속 → mDNS 발견 접속 → 목록 갱신.
     /* 정책: kill-server로 track-devices가 죽어도 자가회복이 되살리므로 안전하다.
        Mac에서 할 수 있는 것들을 전부 돌리고, 그래도 기기가 없으면 폰 쪽 점검
-       (USB '파일 전송' 모드 / 무선 디버깅 ON)을 다음 단계로 제시한다. */
+       (USB '파일 전송' 모드 / 무선 디버깅 ON)을 다음 단계로 제시한다.
+       실무(performRecovery)는 DeX 실행 실패 시 자동 재시도에서도 재사용한다. */
     func recoverConnections() {
         guard busyMessage == nil else { return }
         busyMessage = "연결 복구 중… (몇 초 걸림)"
         Task {
-            // 1) adb 서버 완전 재시작 — 고착/이상 상태 리셋
-            _ = try? await ProcessRunner.run(Binaries.adb, arguments: ["kill-server"],
-                                             environment: Binaries.processEnvironment)
-            _ = try? await ProcessRunner.run(Binaries.adb, arguments: ["start-server"],
-                                             environment: Binaries.processEnvironment)
-
-            // 2) 기억해 둔 무선 기기 재접속
-            var connected: [String] = []
-            for host in UserDefaults.standard.stringArray(forKey: Self.wirelessHostsKey) ?? [] {
-                if (try? await ADB.connect(host: host)) != nil {
-                    connected.append(host)
-                }
-            }
-
-            // 3) mDNS로 지금 발견되는 무선 디버깅 기기도 자동 접속(페어링 대기 서비스는 제외)
-            if let services = try? await ADB.mdnsServices() {
-                for service in services
-                where service.name.hasPrefix("무선 디버깅") && !connected.contains(service.address) {
-                    if (try? await ADB.connect(host: service.address)) != nil {
-                        connected.append(service.address)
-                    }
-                }
-            }
-
-            // 4) 목록 즉시 갱신(감시 자가회복 스냅샷을 기다리지 않는다)
-            if let list = try? await ADB.listDevices() {
-                applyDeviceSnapshot(list)
-            }
-
+            let connected = await performRecovery()
             busyMessage = nil
             if !connected.isEmpty {
                 toast = "복구 완료 — \(connected.joined(separator: ", ")) 연결됨"
@@ -558,6 +563,40 @@ final class AppState {
                 lastError = "복구 후에도 기기가 보이지 않습니다. 폰에서 확인하세요 — ① USB 알림 → '파일 전송' 모드 선택 ② 개발자 옵션 → 무선 디버깅 켜기 ③ 맥과 같은 Wi-Fi인지 확인"
             }
         }
+    }
+
+    /// 복구 실무 — 완료를 기다릴 수 있고, 연결에 성공한 호스트를 돌려준다.
+    @discardableResult
+    private func performRecovery() async -> [String] {
+        // 1) adb 서버 완전 재시작 — 고착/이상 상태 리셋
+        _ = try? await ProcessRunner.run(Binaries.adb, arguments: ["kill-server"],
+                                         environment: Binaries.processEnvironment)
+        _ = try? await ProcessRunner.run(Binaries.adb, arguments: ["start-server"],
+                                         environment: Binaries.processEnvironment)
+
+        // 2) 기억해 둔 무선 기기 재접속
+        var connected: [String] = []
+        for host in UserDefaults.standard.stringArray(forKey: Self.wirelessHostsKey) ?? [] {
+            if (try? await ADB.connect(host: host)) != nil {
+                connected.append(host)
+            }
+        }
+
+        // 3) mDNS로 지금 발견되는 무선 디버깅 기기도 자동 접속(페어링 대기 서비스는 제외)
+        if let services = try? await ADB.mdnsServices() {
+            for service in services
+            where service.name.hasPrefix("무선 디버깅") && !connected.contains(service.address) {
+                if (try? await ADB.connect(host: service.address)) != nil {
+                    connected.append(service.address)
+                }
+            }
+        }
+
+        // 4) 목록 즉시 갱신(감시 자가회복 스냅샷을 기다리지 않는다)
+        if let list = try? await ADB.listDevices() {
+            applyDeviceSnapshot(list)
+        }
+        return connected
     }
 
     // MARK: 파일 전송

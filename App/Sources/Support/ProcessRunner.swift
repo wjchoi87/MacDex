@@ -148,11 +148,31 @@ enum ProcessRunner {
 }
 
 /// 장기 실행 프로세스(adb track-devices, scrcpy 등) 래퍼.
-/// 라인 스트리밍 + 원시 바이트 스트리밍 + 종료 감지 콜백 제공.
+/// 라인 스트리밍 + 원시 바이트 스트리밍 + 종료 감지 콜백 + stderr 꼬리 캡처 제공.
 final class StreamingProcess: @unchecked Sendable {
     private let process = Process()
     private let queue = DispatchQueue(label: "macdroid.streaming-process")
     private var terminated = false
+
+    // stderr 마지막 2KB — 프로세스가 조기 사망했을 때 원인을 사용자에게 보여 주기 위함.
+    private var errTail = Data()
+    private let errLock = NSLock()
+
+    /// 캡처된 stderr 마지막 부분(실패 진단용).
+    var stderrTail: String {
+        errLock.lock(); defer { errLock.unlock() }
+        return String(data: errTail, encoding: .utf8) ?? ""
+    }
+
+    /// 프로세스가 아직 살아 있는지(조기 사망 감지용 폴링).
+    var isRunning: Bool { process.isRunning }
+
+    private func appendErrTail(_ byte: UInt8) {
+        errLock.lock()
+        if errTail.count > 2048 { errTail.removeFirst(errTail.count - 2048) }
+        errTail.append(byte)
+        errLock.unlock()
+    }
 
     /// stdout을 한 줄씩 전달(개행 제거).
     func start(
@@ -171,9 +191,11 @@ final class StreamingProcess: @unchecked Sendable {
         process.standardError = errPipe
         try process.run()
 
-        // stderr는 항상 소비 — 두고 않으면 파이프가 차서 자식이 막힌다.
-        Task.detached(priority: .utility) {
-            for try await _ in errPipe.fileHandleForReading.bytes {}
+        // stderr는 항상 소비 — 두고 않으면 파이프가 차서 자식이 막힌다(마지막 2KB 보관).
+        Task.detached(priority: .utility) { [weak self] in
+            for try await byte in errPipe.fileHandleForReading.bytes {
+                self?.appendErrTail(byte)
+            }
         }
 
         let stdout = outPipe.fileHandleForReading
@@ -214,8 +236,10 @@ final class StreamingProcess: @unchecked Sendable {
         process.standardError = errPipe
         try process.run()
 
-        Task.detached(priority: .utility) {
-            for try await _ in errPipe.fileHandleForReading.bytes {}
+        Task.detached(priority: .utility) { [weak self] in
+            for try await byte in errPipe.fileHandleForReading.bytes {
+                self?.appendErrTail(byte)
+            }
         }
 
         let stdout = outPipe.fileHandleForReading
