@@ -29,6 +29,8 @@ struct MainView: View {
             } else {
                 EmptyStateView {
                     activeSheet = .onboarding
+                } onRecover: {
+                    appState.recoverConnections()
                 } onPair: {
                     activeSheet = .pair
                 }
@@ -136,7 +138,10 @@ struct DeviceRow: View {
 
 struct EmptyStateView: View {
     var onGuide: () -> Void
+    var onRecover: () -> Void
     var onPair: () -> Void
+
+    @Environment(AppState.self) private var appState
 
     var body: some View {
         VStack(spacing: 24) {
@@ -159,6 +164,14 @@ struct EmptyStateView: View {
                 } label: {
                     Label("연결 가이드", systemImage: "questionmark.circle")
                 }
+
+                // 연결했던 기기가 갑자기 안 보일 때 — adb 리셋 + 무선 재접속 원클릭
+                Button {
+                    onRecover()
+                } label: {
+                    Label("연결 복구", systemImage: "arrow.triangle.2.circlepath")
+                }
+                .disabled(appState.busyMessage != nil)
 
                 Button {
                     onPair()

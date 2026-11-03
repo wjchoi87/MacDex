@@ -415,6 +415,56 @@ final class AppState {
         }
     }
 
+    // MARK: 연결 복구
+
+    /// 원클릭 연결 복구(초보자용): adb 서버 재시작 → 기억된 무선 재접속 → mDNS 발견 접속 → 목록 갱신.
+    /* 정책: kill-server로 track-devices가 죽어도 자가회복이 되살리므로 안전하다.
+       Mac에서 할 수 있는 것들을 전부 돌리고, 그래도 기기가 없으면 폰 쪽 점검
+       (USB '파일 전송' 모드 / 무선 디버깅 ON)을 다음 단계로 제시한다. */
+    func recoverConnections() {
+        guard busyMessage == nil else { return }
+        busyMessage = "연결 복구 중… (몇 초 걸림)"
+        Task {
+            // 1) adb 서버 완전 재시작 — 고착/이상 상태 리셋
+            _ = try? await ProcessRunner.run(Binaries.adb, arguments: ["kill-server"],
+                                             environment: Binaries.processEnvironment)
+            _ = try? await ProcessRunner.run(Binaries.adb, arguments: ["start-server"],
+                                             environment: Binaries.processEnvironment)
+
+            // 2) 기억해 둔 무선 기기 재접속
+            var connected: [String] = []
+            for host in UserDefaults.standard.stringArray(forKey: Self.wirelessHostsKey) ?? [] {
+                if (try? await ADB.connect(host: host)) != nil {
+                    connected.append(host)
+                }
+            }
+
+            // 3) mDNS로 지금 발견되는 무선 디버깅 기기도 자동 접속(페어링 대기 서비스는 제외)
+            if let services = try? await ADB.mdnsServices() {
+                for service in services
+                where service.name.hasPrefix("무선 디버깅") && !connected.contains(service.address) {
+                    if (try? await ADB.connect(host: service.address)) != nil {
+                        connected.append(service.address)
+                    }
+                }
+            }
+
+            // 4) 목록 즉시 갱신(감시 자가회복 스냅샷을 기다리지 않는다)
+            if let list = try? await ADB.listDevices() {
+                applyDeviceSnapshot(list)
+            }
+
+            busyMessage = nil
+            if !connected.isEmpty {
+                toast = "복구 완료 — \(connected.joined(separator: ", ")) 연결됨"
+            } else if devices.contains(where: { $0.state == .online }) {
+                toast = "복구 완료 — USB 기기가 인식되었습니다"
+            } else {
+                lastError = "복구 후에도 기기가 보이지 않습니다. 폰에서 확인하세요 — ① USB 알림 → '파일 전송' 모드 선택 ② 개발자 옵션 → 무선 디버깅 켜기 ③ 맥과 같은 Wi-Fi인지 확인"
+            }
+        }
+    }
+
     // MARK: 파일 전송
 
     func pushFiles(_ files: [URL], to device: Device) {

@@ -36,6 +36,8 @@ struct PairSheetView: View {
             case .ip: directTab
             case .mdns: mdnsTab
             }
+
+            footer
         }
         .frame(width: 480, height: 460)
         /* 진행 상태를 시트 안에서 보이게: 기존엔 메인 창 배너에만 뜨는데 시트가
@@ -60,6 +62,28 @@ struct PairSheetView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 20)
+    }
+
+    // MARK: 하단 액션(초보자용)
+
+    /// 연결 복구 + 닫기 — 시트를 닫을 방법이 없다는 피드백 반영. Esc는 .cancelAction으로 연결.
+    private var footer: some View {
+        HStack {
+            Button {
+                appState.recoverConnections()
+            } label: {
+                Label("연결 복구", systemImage: "arrow.triangle.2.circlepath")
+            }
+            .help("adb 재시작, 연결했던 무선 기기 재접속, 주변 기기 재검색을 한 번에 실행합니다. 연결이 안 될 때 눌러보세요.")
+            .disabled(isBusy)
+
+            Spacer()
+
+            Button("닫기") { dismiss() }
+                .keyboardShortcut(.cancelAction)
+        }
+        .padding(.horizontal, 24)
+        .padding(.bottom, 16)
     }
 
     // MARK: 페어링 코드
