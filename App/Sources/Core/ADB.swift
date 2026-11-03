@@ -206,17 +206,22 @@ enum ADB {
     /* 파서 정책: adb mdns services의 컬럼 순서는 버전에 따라 다를 수 있어,
        각 줄에서 "ip:port" 패턴과 서비스 종류(pairing)를 정규식/문자열로 찾는다
        (고정 컬럼 파싱은 형식이 뒤집히면 전부 누락된다).
+       중복 제거: 가상 네트워크 인터페이스(OrbStack/VM bridge·vmenet)가 많으면 같은
+       서비스가 여러 번 반환된다(실측 8번) — address+pairing 기준으로 1개만 남긴다.
        주의: mDNS는 같은 LAN(멀티캐스트 도메인)에서만 동작 — VPN(Tailscale 등)이나
        다른 서브넷의 기기는 발견되지 않는다(실측). */
     static func mdnsServices() async throws -> [MdnsService] {
         let result = try? await ProcessRunner.run(Binaries.adb, arguments: ["mdns", "services"], environment: env)
         guard let output = result?.stdout else { return [] }
         var services: [MdnsService] = []
+        var seen = Set<String>()
         for line in output.split(separator: "\n").dropFirst() {  // 헤더 "List of..." 제거
             guard let range = line.range(of: #"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+)"#,
                                          options: .regularExpression) else { continue }
             let address = String(line[range])
             let isPairing = line.lowercased().contains("pairing")
+            let key = (isPairing ? "P" : "C") + address
+            guard seen.insert(key).inserted else { continue }  // 인터페이스 중복 제거
             let name = (isPairing ? "페어링 대기중" : "무선 디버깅") + " (\(address))"
             services.append(MdnsService(name: name, address: address))
         }

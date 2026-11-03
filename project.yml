@@ -35,6 +35,13 @@ targets:
         NSPrincipalClass: NSApplication
         CFBundleIconFile: AppIcon
         ITSAppUsesNonExemptEncryption: false
+        # 로컬 네트워크 권한: 앱 소속 adb server가 LAN mDNS/unicast를 쓰려면 필수
+        # (없으면 macOS가 조용히 차단 — 자동발견 빈 목록 + "No route to host" 실측)
+        NSLocalNetworkUsageDescription: "같은 Wi-Fi에 있는 Android 기기를 찾아 무선으로 연결하기 위해 로컬 네트워크 접근이 필요합니다."
+        NSBonjourServices:
+          - _adb-tls-connect._tcp
+          - _adb-tls-pairing._tcp
+          - _adb._tcp
     postBuildScripts:
       - name: Install Vendor Binaries
         script: |

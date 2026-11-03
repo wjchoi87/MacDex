@@ -18,6 +18,7 @@ struct PairSheetView: View {
     @State private var pairCode = ""
     @State private var connectHost = ""
     @State private var mdnsServices: [MdnsService] = []
+    @State private var networkStatus: LocalNetworkStatus = .unknown
 
     var body: some View {
         VStack(spacing: 0) {
@@ -168,20 +169,43 @@ struct PairSheetView: View {
 
             if mdnsServices.isEmpty {
                 VStack(spacing: 8) {
-                    Image(systemName: "wifi.router")
-                        .font(.largeTitle)
-                        .foregroundStyle(.tertiary)
-                    Text("발견된 기기가 없습니다.\n폰에서 무선 디버깅을 켜고 맥과 같은 Wi-Fi에 연결하세요.")
-                        .multilineTextAlignment(.center)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    // mDNS는 같은 LAN에서만 동작 — VPN으로 붙은 기기가 있으면 그 사실을 안내(실측 사례)
-                    if vpnConnectedDeviceExists {
-                        Text("지금 VPN(Tailscale 등)으로 연결된 기기가 있습니다.\n자동 발견은 같은 와이파이에서만 동작하니, 'IP 직접 연결' 탭을 사용하세요.")
-                            .multilineTextAlignment(.center)
-                            .font(.caption)
+                    // 권한 거부가 확인되면 이것이 1순위 원인 — 폰 안내보다 먼저 보여준다(실측 사례)
+                    if networkStatus == .denied {
+                        Image(systemName: "network.badge.shield.half.filled")
+                            .font(.largeTitle)
                             .foregroundStyle(.orange)
-                            .padding(.top, 4)
+                        Text("MacDroid의 로컬 네트워크 접근이 차단되어 있습니다.\n같은 Wi-Fi의 기기를 찾을 수 없습니다.")
+                            .multilineTextAlignment(.center)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        Button {
+                            LocalNetworkPermission.openSystemSettings()
+                        } label: {
+                            Label("시스템 설정에서 허용하기", systemImage: "gear")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .padding(.top, 4)
+                        Button {
+                            Task { await probeAndReload() }
+                        } label: {
+                            Text("권한을 허용한 뒤 다시 검색")
+                        }
+                    } else {
+                        Image(systemName: "wifi.router")
+                            .font(.largeTitle)
+                            .foregroundStyle(.tertiary)
+                        Text("발견된 기기가 없습니다.\n폰에서 무선 디버깅을 켜고 맥과 같은 Wi-Fi에 연결하세요.")
+                            .multilineTextAlignment(.center)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        // mDNS는 같은 LAN에서만 동작 — VPN으로 붙은 기기가 있으면 그 사실을 안내(실측 사례)
+                        if vpnConnectedDeviceExists {
+                            Text("지금 VPN(Tailscale 등)으로 연결된 기기가 있습니다.\n자동 발견은 같은 와이파이에서만 동작하니, 'IP 직접 연결' 탭을 사용하세요.")
+                                .multilineTextAlignment(.center)
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                                .padding(.top, 4)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -203,12 +227,18 @@ struct PairSheetView: View {
         }
         .padding(24)
         .task {
-            await reloadMdns()
+            await probeAndReload()
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(5))
                 await reloadMdns()
             }
         }
+    }
+
+    /// 권한 점검(Bonjour 탐색으로 프롬프트 유발) 후 목록 갱신.
+    private func probeAndReload() async {
+        networkStatus = await LocalNetworkPermission.probe()
+        await reloadMdns()
     }
 
     private func reloadMdns() async {

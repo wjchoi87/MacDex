@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Darwin
 
 /// 앱 전역 상태 저장소.
 /// 정책: 모든 상태 변이는 MainActor. adb/scrcpy 비동기 결과만 받아들인다.
@@ -74,9 +75,26 @@ final class AppState {
 
     func start() {
         guard monitorProcess == nil, monitorRestartTask == nil else { return }
+        cleanupOrphanTrackers()
         startDeviceMonitoring()
         startWirelessSweep()
         adoptOrphanSessions()
+    }
+
+    /// 이전 실행이 남긴 고아 adb track-devices 정리.
+    /* 정책: 앱이 정상 종료 경로(applicationWillTerminate)를 밟지 않고 죽으면(Xcode 재실행,
+       강제 종료) track-devices가 PPID 1로 남아 계속 쌓인다(실측 3개).
+       커맨드가 '우리 번들 adb 경로 + track-devices'이고 PPID==1인 프로세스만 SIGTERM —
+       SDK/홈브루 adb나 현재 실행 중인 우리 감시(PPID=앱)는 건드리지 않는다. */
+    private func cleanupOrphanTrackers() {
+        DispatchQueue.global(qos: .utility).async {
+            for entry in ProcessScan.snapshot()
+            where entry.ppid == 1
+                && entry.command.hasPrefix(Binaries.adb.path)
+                && entry.command.contains("track-devices") {
+                kill(entry.pid, SIGTERM)
+            }
+        }
     }
 
     /* 정책: adb 서버는 Mac의 다른 adb 클라이언트(홈브루/SDK 등)와 공유된다. 버전이 다른
@@ -342,73 +360,71 @@ final class AppState {
        스캔해 세션으로 "입양"한다 — 목록에 보이고 닫기로 종료할 수 있다.
        영향 범위: 앱 재시작 전후 창 관리. 입양 세션은 pid kill로 종료한다. */
     private func adoptOrphanSessions() {
-        Task {
+        // ps 스캔은 ProcessScan(GCD 동기)으로 — ProcessRunner 경로가 앱 시작 시점에
+        // 묶이는 사례를 실측했다(고아 정리와 같은 이유).
+        DispatchQueue.global(qos: .utility).async { [weak self] in
             var found: [Int32: ScrcpySession] = [:]
 
             // 1) 실행 중인 우리 scrcpy 프로세스(경로로 판별 — 다른 scrcpy와 구분)
-            if let result = try? await ProcessRunner.run(
-                URL(fileURLWithPath: "/bin/ps"),
-                arguments: ["-axo", "pid=,command="],
-                environment: Binaries.processEnvironment
-            ) {
-                for rawLine in result.stdout.split(separator: "\n") {
-                    let line = String(rawLine).trimmingCharacters(in: .whitespaces)
-                    guard line.hasPrefix(Binaries.scrcpy.path) else { continue }
-                    let parts = line.split(separator: " ").map(String.init)
-                    guard let pid = Int32(parts.first ?? "") else { continue }
-                    let args = Array(parts.dropFirst())
+            for entry in ProcessScan.snapshot() {
+                guard entry.command.hasPrefix(Binaries.scrcpy.path) else { continue }
+                let parts = entry.command.split(separator: " ").map(String.init)
+                let args = Array(parts.dropFirst())
 
-                    guard let sIndex = args.firstIndex(of: "-s"), sIndex + 1 < args.count else { continue }
-                    let serial = args[sIndex + 1]
+                guard let sIndex = args.firstIndex(of: "-s"), sIndex + 1 < args.count else { continue }
+                let serial = args[sIndex + 1]
 
-                    let startApp = args.first(where: { $0.hasPrefix("--start-app=") })?
-                        .dropFirst("--start-app=".count).trimmingCharacters(in: CharacterSet(charactersIn: "+"))
-                    let hasNewDisplay = args.contains { $0.hasPrefix("--new-display") }
+                let startApp = args.first(where: { $0.hasPrefix("--start-app=") })?
+                    .dropFirst("--start-app=".count).trimmingCharacters(in: CharacterSet(charactersIn: "+"))
+                let hasNewDisplay = args.contains { $0.hasPrefix("--new-display") }
 
-                    let mode: ScrcpySession.Mode
-                    var package: String?
-                    if let startApp, !startApp.isEmpty {
-                        mode = .app
-                        package = startApp
-                    } else if hasNewDisplay {
-                        mode = .dex
-                    } else {
-                        mode = .mirror
-                    }
-                    let label: String
-                    switch mode {
-                    case .mirror: label = "미러링"
-                    case .app: label = "앱 창 (\(package ?? "?"))"
-                    case .dex: label = "DeX 데스크톱"
-                    }
-                    found[pid] = ScrcpySession(
-                        id: Scrcpy.makeID(serial: serial, mode: mode, package: package),
-                        deviceSerial: serial, mode: mode,
-                        title: "MacDroid · \(serial) \(label)",
-                        externalPID: pid
-                    )
+                let mode: ScrcpySession.Mode
+                var package: String?
+                if let startApp, !startApp.isEmpty {
+                    mode = .app
+                    package = startApp
+                } else if hasNewDisplay {
+                    mode = .dex
+                } else {
+                    mode = .mirror
                 }
+                let label: String
+                switch mode {
+                case .mirror: label = "미러링"
+                case .app: label = "앱 창 (\(package ?? "?"))"
+                case .dex: label = "DeX 데스크톱"
+                }
+                found[entry.pid] = ScrcpySession(
+                    id: Scrcpy.makeID(serial: serial, mode: mode, package: package),
+                    deviceSerial: serial, mode: mode,
+                    title: "MacDroid · \(serial) \(label)",
+                    externalPID: entry.pid
+                )
             }
 
             // 살아 있는 것만 입양
             var adopted = found.values.filter { $0.isProcessAlive }
             guard !adopted.isEmpty else { return }
 
-            // 이미 등록된 세션(pid 보유)과 중복되지 않게
-            adopted.removeAll { orphan in
-                sessions.contains { $0.deviceSerial == orphan.deviceSerial && $0.id == orphan.id && $0.externalPID == nil }
-            }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                // 이미 등록된 세션(pid 보유)과 중복되지 않게
+                adopted.removeAll { orphan in
+                    self.sessions.contains { $0.deviceSerial == orphan.deviceSerial && $0.id == orphan.id && $0.externalPID == nil }
+                }
+                guard !adopted.isEmpty else { return }
 
-            // 입양 세션이 있는 기기는 stay_on이 켜져 있을 수 있다 — 마지막 세션 종료 시 0으로 복구되도록 기록
-            let serials = Set(adopted.map(\.deviceSerial))
-            for serial in serials where stayOnSaved[serial] == nil {
-                let current = try? await ADB.shell(serial: serial, "settings get global stay_on_while_plugged_in")
-                let value = Int(current?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "") ?? 0
-                if value != 0 { stayOnSaved[serial] = 0 }
-            }
+                // 입양 세션이 있는 기기는 stay_on이 켜져 있을 수 있다 — 복구 기준 기록
+                let serials = Set(adopted.map(\.deviceSerial))
+                for serial in serials where self.stayOnSaved[serial] == nil {
+                    let current = try? await ADB.shell(serial: serial, "settings get global stay_on_while_plugged_in")
+                    let value = Int(current?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "") ?? 0
+                    if value != 0 { self.stayOnSaved[serial] = 0 }
+                }
 
-            sessions.append(contentsOf: adopted)
-            toast = "이전 실행의 창 \(adopted.count)개를 다시 관리합니다 (닫기로 종료 가능)"
+                self.sessions.append(contentsOf: adopted)
+                self.toast = "이전 실행의 창 \(adopted.count)개를 다시 관리합니다 (닫기로 종료 가능)"
+            }
         }
     }
 
@@ -466,17 +482,43 @@ final class AppState {
         }
     }
 
-    /* 무선 실패 안내: 타임아웃/거부를 구분해 다음 조치를 알려준다.
-       (무한 "연결 중" 방지 — connect 8초, pair 12초 전용 타임아웃). */
+    /* 무선 실패 안내: 타임아웃/거부/로컬네트워크 권한을 구분해 다음 조치를 알려준다.
+       (무한 "연결 중" 방지 — connect 8초, pair 12초 전용 타임아웃).
+       실측: 사설 LAN 대상 "No route to host"는 MacDroid의 로컬 네트워크 권한 차단이
+       원인인 경우가 많다(앱 소속 adb server가 macOS 프라이버시 대상이 됨). */
     private static func describeWirelessFailure(action: String, host: String, error: Error) -> String {
         if case ProcessError.timedOut = error {
             return "\(action) 시간 초과(\(host)) — 주소·포트를 확인하세요. 폰: 개발자 옵션 → 무선 디버깅이 켜져 있고 맥과 같은 네트워크여야 합니다. (VPN으로 붙는 경우 폰의 VPN IP:5555 사용)"
         }
         let raw = error.localizedDescription
+        if isLocalNetworkBlock(host: host, message: raw) {
+            return "\(action) 실패(\(host)) — MacDroid의 로컬 네트워크 권한이 차단되었을 수 있습니다.\n시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 MacDroid를 허용한 뒤 다시 시도하세요."
+        }
         if raw.contains("cannot connect") || raw.contains("Connection refused") {
             return "\(action) 실패(\(host)) — 포트가 닫혀 있습니다. 폰의 무선 디버깅 화면에 나온 포트가 맞는지 확인하세요(포트는 다시 열 때마다 바뀝니다)."
         }
         return "\(action) 실패: \(raw)"
+    }
+
+    /// 사설 LAN 대상 + 도달 불가 계열 메시지 → 로컬 네트워크 권한 차단으로 판정.
+    private static func isLocalNetworkBlock(host: String, message: String) -> Bool {
+        let unreachable = message.contains("No route to host")
+            || message.contains("unreachable")
+            || message.contains("Host is down")
+        return unreachable && isPrivateLANHost(host)
+    }
+
+    /// 사설 대역(10/8, 172.16/12, 192.168/16, 169.254/16) 판정 — 공인·VPN(100.64/10)은 제외.
+    private static func isPrivateLANHost(_ host: String) -> Bool {
+        let ip = host.split(separator: ":").first.map(String.init) ?? host
+        let octets = ip.split(separator: ".").compactMap { Int($0) }
+        guard octets.count == 4 else { return false }
+        let (a, b) = (octets[0], octets[1])
+        if a == 10 { return true }
+        if a == 172 && (16...31).contains(b) { return true }
+        if a == 192 && b == 168 { return true }
+        if a == 169 && b == 254 { return true }
+        return false
     }
 
     /// USB 기기를 무선으로 전환.
@@ -518,13 +560,27 @@ final class AppState {
     }
 
     /// 복구 실무 — 완료를 기다릴 수 있고, 연결에 성공한 호스트를 돌려준다.
+    /* 변경 전 정책: 무조건 kill-server → start-server를 MacDroid 번들 adb로 실행했다.
+       문제(실측): 터미널/Android Studio가 띄운 정상 동작 서버를 죽이고 MacDroid 소속
+       서버로 바꿔 버려, 오히려 LAN(로컬 네트워크 권한)이 끊겼다. kill-server는 같은 Mac의
+       다른 adb 클라이언트를 전부 끊는다는 점도 주석으로 남긴다.
+       변경 후 정책: 먼저 서버 응답(adb devices, 5초)을 확인하고, 고착(무응답)일 때만
+       재시작한다. 권한 거부 상태라면 재시작해도 LAN은 안 풀리므로 안내가 먼저다(탐지는
+       PairSheet/연결 실패 메시지가 담당). */
     @discardableResult
     private func performRecovery() async -> [String] {
-        // 1) adb 서버 완전 재시작 — 고착/이상 상태 리셋
-        _ = try? await ProcessRunner.run(Binaries.adb, arguments: ["kill-server"],
-                                         environment: Binaries.processEnvironment)
-        _ = try? await ProcessRunner.run(Binaries.adb, arguments: ["start-server"],
-                                         environment: Binaries.processEnvironment)
+        // 1) 서버 건강 검사 — 살아 있으면 건드리지 않는다
+        let healthy = ((try? await ProcessRunner.run(
+            Binaries.adb, arguments: ["devices"],
+            environment: Binaries.processEnvironment, timeout: 5
+        ))?.succeeded) == true
+        if !healthy {
+            // 고착 상태만 재시작(다른 adb 클라이언트 연결이 끊긴다는 비용이 있다)
+            _ = try? await ProcessRunner.run(Binaries.adb, arguments: ["kill-server"],
+                                             environment: Binaries.processEnvironment)
+            _ = try? await ProcessRunner.run(Binaries.adb, arguments: ["start-server"],
+                                             environment: Binaries.processEnvironment)
+        }
 
         // 2) 기억해 둔 무선 기기 재접속
         var connected: [String] = []
