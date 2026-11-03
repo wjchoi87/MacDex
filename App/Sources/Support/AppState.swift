@@ -140,10 +140,16 @@ final class AppState {
         }
     }
 
-    /// DeX 앱 창(가상 디스플레이). 같은 앱 창이 이미 있으면 새로 띄우지 않는다.
-    func launchAppWindow(for device: Device, app: AndroidApp) {
+    /// DeX 앱 창(가상 디스플레이).
+    /* 변경 전 정책: 같은 앱 창이 이미 있으면 무조건 무시했다(사용자에게 피드백 없음).
+       변경 후 정책: forceNewInstance면 '+' 프리픽스로 새 인스턴스를 추가 실행하고,
+         기본값은 여전히 무시 — 중복 확인 다이얼로그는 LauncherView가 담당한다.
+       이유: Android의 앱 task 재사용 특성상 의도치 않은 이중 실행을 막되,
+         사용자가 명시적으로 원할 때는 별도 창을 띄워주기 위함.
+       영향 범위: DeX 런처의 동일 앱 재실행 경로만. */
+    func launchAppWindow(for device: Device, app: AndroidApp, forceNewInstance: Bool = false) {
         let id = Scrcpy.makeID(serial: device.serial, mode: .app, package: app.package)
-        if sessions.contains(where: { $0.id == id }) { return }
+        if !forceNewInstance, sessions.contains(where: { $0.id == id }) { return }
 
         var session = ScrcpySession(
             id: id,
@@ -153,7 +159,8 @@ final class AppState {
         )
         // 오디오 중복 방지: 이 기기에 이미 오디오 켜진 세션이 있으면 이번 창은 무음
         let audioAllowed = !sessions.contains { $0.deviceSerial == device.serial }
-        let args = Scrcpy.appArguments(device: device, app: app, settings: settings, audioAllowed: audioAllowed)
+        let args = Scrcpy.appArguments(device: device, app: app, settings: settings,
+                                       audioAllowed: audioAllowed, forceNewInstance: forceNewInstance)
         do {
             let process = try Scrcpy.launch(arguments: args, sessionID: session.key)
             session.attach(process)
@@ -161,6 +168,16 @@ final class AppState {
         } catch {
             lastError = "앱 창 실행 실패: \(error.localizedDescription)"
         }
+    }
+
+    /// 기존 창을 종료하고 새로 실행(확인 다이얼로그에서 '기존 창 닫고 새로 실행'을 고른 경로).
+    func relaunchAppWindow(for device: Device, app: AndroidApp) {
+        let id = Scrcpy.makeID(serial: device.serial, mode: .app, package: app.package)
+        for session in sessions where session.id == id {
+            session.terminate()
+            sessions.removeAll { $0.key == session.key }  // onExit 대기 없이 즉시 제거(재실행 id 충돌 방지)
+        }
+        launchAppWindow(for: device, app: app)
     }
 
     func stopSession(_ session: ScrcpySession) {

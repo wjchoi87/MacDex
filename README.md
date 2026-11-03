@@ -1,49 +1,101 @@
-# MacDroid
+# MacDroid — a native DeX for macOS
 
-맥에서 쓰는 안드로이드 데스크톱 — Samsung DeX / Android DEX 대체.
+Turn your Android phone into a desktop on your Mac: mirror the screen with ultra-low latency, or run individual Android apps in their own resizable Mac windows — Samsung DeX / Android DEX style, native and fast.
 
-폰을 USB 또는 Wi-Fi로 연결하면:
-- **화면 미러링** — 초저지연 하드웨어 디코딩(scrcpy 기반), 물리 키보드·마우스·한글 IME
-- **DeX 모드** — 안드로이드 앱을 각자 독립된 가상 디스플레이 창에서 실행(폰 화면 유지)
-- **무선 연결** — 페어링 코드 / IP 직접 / mDNS 자동 발견, USB→무선 원클릭 전환
-- **파일 전송** — 드래그 없이 선택해서 폰 Download 폴더로 전송
-- **메뉴바 빠른 미러링**
+Built on [scrcpy](https://github.com/Genymobile/scrcpy) (Apache-2.0) for the streaming core with Metal rendering and VideoToolbox hardware decoding, wrapped in a native SwiftUI/AppKit shell. No Electron. No cloud. Everything runs locally over USB or Wi-Fi.
 
-## 기술
+## Features
 
-- SwiftUI/AppKit 네이티브 셸 (macOS 14+)
-- 스트리밍 코어: [scrcpy](https://github.com/Genymobile/scrcpy) (Apache-2.0) — 바이너리 임베드
-- adb(AOSP) / aapt2(AOSP) 임베드 — 외부 설치 불필요
-- 라이선스 고지: `LICENSES/NOTICE.md`
+- **Screen mirroring** — ultra-low-latency mirroring with hardware decoding (Metal + VideoToolbox), quality presets (Balanced / Crisp / Lightweight) and full manual control (codec, bitrate, resolution, fps)
+- **DeX mode** — launch Android apps in separate windows, each on its own **independent virtual display**; the phone screen stays untouched, and multiple apps run at the same time. Launching an app that is already running asks whether you want a separate new instance or to restart it
+- **Physical keyboard & mouse** — uhid mode gives you hover, game keys, and your phone's IME (Korean/Japanese/…) exactly like a hardware keyboard
+- **Wireless** — pair with a 6-digit code, connect directly by IP, discover devices via mDNS, or switch a USB connection to Wi-Fi in one click
+- **File transfer** — send files to the phone's Download folder
+- **Menu bar quick mirror** — start mirroring right from the menu bar
+- **Private by design** — no telemetry, no servers, no data collection. All traffic stays between your Mac and your phone (standard ADB over USB/Wi-Fi)
 
-## 빌드
+## Installation
+
+### Requirements
+
+- macOS 14.0 (Sonoma) or later
+- [Xcode](https://developer.apple.com/xcode/) 16 or later (a command-line build is enough)
+- [Homebrew](https://brew.sh)
+- Android SDK `platform-tools` (adb) and `build-tools` (aapt2) — easiest via [Android Studio](https://developer.android.com/studio) or `sdkmanager`
+- On the phone: **Developer options → USB debugging** (and **Wireless debugging** for Wi-Fi)
+
+### Build from source
 
 ```bash
-# 최초 1회: scrcpy/adb/aapt2 확보 (brew + Android SDK)
-brew install scrcpy
-# adb, aapt2: ~/Library/Android/sdk (platform-tools, build-tools)
+# 1. Get the tools
+brew install scrcpy xcodegen
 
-./scripts/make-iconset.sh    # 앱 아이콘 생성 (최초 1회)
-xcodegen                     # .xcodeproj 생성
-xcodebuild -project MacDroid.xcodeproj -scheme MacDroid -configuration Debug build \
+# 2. Clone
+git clone https://github.com/wjchoi87/MacDex.git
+cd MacDex
+
+# 3. Generate the app icon and the Xcode project
+./scripts/make-iconset.sh
+xcodegen
+
+# 4. Build (also bundles adb / scrcpy / aapt2 into the app)
+xcodebuild -project MacDroid.xcodeproj -scheme MacDroid -configuration Release build \
   -derivedDataPath build/DerivedData
 
-# 실행
-open build/DerivedData/Build/Products/Debug/MacDroid.app
+# 5. Run
+open build/DerivedData/Build/Products/Release/MacDroid.app
 ```
 
-`Vendor/`는 fetch-vendor.sh가 생성(git 제외). 빌드 post-script가 .app으로 복사한다.
+The build script (`scripts/fetch-vendor.sh`) bundles `adb`, `scrcpy` (with its dylib tree) and `aapt2` into the app, so the finished app has **no external dependencies** — end users never need Homebrew or the Android SDK to run it.
 
-## 구조
+If your binaries live somewhere unusual, override them:
 
-```
-App/Sources/Core      ADB, Scrcpy, AppCatalog — 외부 프로세스 계층
-App/Sources/Support   AppState(중앙 상태), ProcessRunner, Binaries
-App/Sources/Views     MainView, DeviceDetail, Launcher(DeX), Pair, Settings, Onboarding
-scripts/              vendor 번들링, 아이콘 생성
+```bash
+ADB_SRC=/path/to/adb AAPT2_SRC=/path/to/aapt2 SCRCPY_SRC=/path/to/scrcpy ./scripts/fetch-vendor.sh
 ```
 
-## 배포 시 주의
+### First run on the phone
 
-- 로컬 빌드는 미서명. 배포는 Developer ID 서명 + 공증 필요(vendor 바이너리 포함 전체 번들 서명).
-- scrcpy/adb/aapt2는 Apache-2.0 — NOTICE 고지 유지.
+1. Settings → About phone → tap **Build number** 7 times
+2. Settings → Developer options → enable **USB debugging**
+3. Plug in USB and accept the debugging prompt on the phone
+4. Or go wireless: Developer options → **Wireless debugging** → pair from MacDroid
+
+## Usage
+
+- **Mirror** — select the device, click *Screen mirroring*
+- **DeX windows** — open the app launcher and double-click any app; it opens in its own window on a virtual display (the phone screen is unaffected). Double-clicking a running app asks whether to open a separate new instance or restart it
+- **Go wireless** — with a USB device selected, click *Switch to wireless*, then unplug the cable
+- **Settings** — quality presets, codec/bitrate/resolution/fps, audio, virtual display resolution & DPI, uhid advanced input
+- Shortcuts inside mirroring windows are scrcpy's own (`MOD+F` fullscreen, …) — see `scrcpy --help`
+
+## How it works
+
+```
+┌──────────────┐   USB / Wi-Fi (adb)   ┌──────────────┐
+│    macOS     │ ◄───────────────────► │   Android    │
+│   MacDroid   │   scrcpy-server       │   virtual    │
+│  (SwiftUI +  │   H.264/H.265 +       │  displays    │
+│  Metal/VT)   │   ADB protocol        │  + apps      │
+└──────────────┘                       └──────────────┘
+```
+
+- **Streaming core** — the bundled `scrcpy` binary renders with SDL3/Metal and decodes via VideoToolbox; `scrcpy-server` runs on the phone through ADB
+- **DeX windows** — each window is a separate scrcpy instance with `--new-display` + `--start-app`, giving every app its own virtual display
+- **App icons & names** — pulled lazily from the device (`pm list` + APK + `aapt2`), cached locally
+- **Device tracking** — `adb track-devices` with a proper length-prefixed frame parser
+
+## Third-party software
+
+MacDroid bundles and depends on (all Apache-2.0):
+
+- [scrcpy](https://github.com/Genymobile/scrcpy) — screen mirroring & control (Copyright © 2018 Genymobile)
+- **adb** (Android Debug Bridge) and **aapt2** — Copyright © The Android Open Source Project
+
+See [LICENSES/NOTICE.md](LICENSES/NOTICE.md) for full attribution.
+
+## License
+
+Copyright 2026 wjchoi87
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).

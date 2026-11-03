@@ -1,14 +1,14 @@
 #!/bin/bash
-# MacDroid vendor 번들링: adb, aapt2, scrcpy(+dylib 재귀 수집, @loader_path 재작성), scrcpy-server
-# 정책: 앱이 외부 brew/SDK 의존 없이 단독 실행되어야 한다(사용자에게 brew 설치를 요구하지 않음).
-# 모든 바이너리는 Apache-2.0(AOSP adb/aapt2, scrcpy)로 재배포 가능 → LICENSES/에 고지 유지.
-# arm64는 서명 필수 → install_name_tool로 고친 모든 Mach-O는 마지막에 ad-hoc 재서명한다.
+# MacDroid vendor bundling: adb, aapt2, scrcpy (+ recursive dylib collection, @loader_path rewrite), scrcpy-server
+# Policy: the app must run standalone without external brew/SDK dependencies for end users.
+# All bundled binaries are Apache-2.0 (AOSP adb/aapt2, scrcpy) — keep the notices in LICENSES/.
+# arm64 requires valid signatures → every Mach-O modified with install_name_tool is re-signed ad-hoc at the end.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VENDOR="$ROOT/Vendor"
 BIN="$VENDOR/bin"; LIB="$VENDOR/lib"; SHARE="$VENDOR/share/scrcpy"
 
-# 캐시: 이미 있으면 스킵 (강제 갱신: rm -rf Vendor)
+# Cache: skip if already prepared (force refresh: rm -rf Vendor)
 if [[ -x "$BIN/scrcpy" && -x "$BIN/adb" && -f "$SHARE/scrcpy-server" ]]; then
   echo "vendor cache OK: $VENDOR"
   exit 0
@@ -23,7 +23,7 @@ SCRCPY_SRC="${SCRCPY_SRC:-$(command -v scrcpy)}"
 SERVER_SRC="${SERVER_SRC:-/opt/homebrew/share/scrcpy/scrcpy-server}"
 
 for f in "$ADB_SRC" "$AAPT2_SRC" "$SCRCPY_SRC" "$SERVER_SRC"; do
-  [[ -f "$f" ]] || { echo "필요한 소스 없음: $f" >&2; exit 1; }
+  [[ -f "$f" ]] || { echo "missing required binary: $f (see README — brew install scrcpy xcodegen + Android SDK platform-tools/build-tools, or set ADB_SRC/AAPT2_SRC/SCRCPY_SRC)" >&2; exit 1; }
 done
 
 cp "$ADB_SRC"    "$BIN/adb"
@@ -32,7 +32,7 @@ cp "$SCRCPY_SRC" "$BIN/scrcpy"
 cp "$SERVER_SRC" "$SHARE/scrcpy-server"
 chmod +x "$BIN/"*
 
-# scrcpy/aapt2(및 전이 dylib)의 homebrew 의존을 lib/으로 재귀 수집
+# Recursively collect homebrew dependencies of scrcpy/aapt2 (and their dylibs) into lib/
 collect_deps() {
   local target="$1"
   otool -L "$target" 2>/dev/null | tail -n +2 | awk '{print $1}' | while read -r dep; do
@@ -51,7 +51,7 @@ collect_deps() {
 collect_deps "$BIN/scrcpy"
 collect_deps "$BIN/aapt2" || true
 
-# 로드 경로 재작성: lib 들은 @loader_path/<name>, bin/의 실행파일은 @loader_path/../lib/<name>
+# Rewrite load paths: libs use @loader_path/<name>, executables in bin/ use @loader_path/../lib/<name>
 fixup() {
   local file="$1" prefix="$2"
   otool -L "$file" 2>/dev/null | tail -n +2 | awk '{print $1}' | while read -r dep; do
@@ -71,11 +71,11 @@ for exe in scrcpy aapt2; do
   fixup "$BIN/$exe" "@loader_path/../lib/"
 done
 
-# arm64 로드를 위해 수정된 모든 Mach-O를 ad-hoc 재서명
+# Re-sign every modified Mach-O ad-hoc so arm64 can load it
 for f in "$BIN"/* "$LIB"/*.dylib; do
   codesign --force --sign - --timestamp=none "$f" 2>/dev/null || true
 done
 
-echo "vendor 준비 완료:"
+echo "vendor ready:"
 du -sh "$VENDOR" || true
-echo "dylib 수: $(ls "$LIB" | wc -l | tr -d ' ')"
+echo "dylib count: $(ls "$LIB" | wc -l | tr -d ' ')"

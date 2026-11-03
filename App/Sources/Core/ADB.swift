@@ -202,7 +202,7 @@ enum ADB {
     static func mdnsServices() async throws -> [MdnsService] {
         let result = try? await ProcessRunner.run(Binaries.adb, arguments: ["mdns", "services"], environment: env)
         guard let output = result?.stdout else { return [] }
-        // 예: "adb-_adb-tls-connect._tcp      _tcp   100.91.33.49:12345"
+        // 예: "adb-_adb-tls-connect._tcp      _tcp   192.168.0.10:12345"
         var services: [MdnsService] = []
         for line in output.split(separator: "\n").dropFirst(2) {
             let cols = line.split(separator: " ").map(String.init)

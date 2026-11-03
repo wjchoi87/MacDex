@@ -1,7 +1,7 @@
 #!/bin/bash
-# 빌드 후 Vendor 바이너리를 .app 번들로 복사.
-# Xcode 리소스 페이즈가 아니라 post-build에서 복사하는 이유:
-# Vendor/는 fetch-vendor.sh가 생성하는 산출물(.gitignore 대상)이라 Xcode 파일 동기화 대상이 아님.
+# Copy Vendor binaries into the .app bundle after the build.
+# Why post-build instead of an Xcode resources phase:
+# Vendor/ is a generated artifact (produced by fetch-vendor.sh, gitignored), so it is not part of Xcode file syncing.
 set -euo pipefail
 APP="${1:?usage: install-vendor.sh <app-bundle> <project-dir>}"
 PROJECT="${2:?usage: install-vendor.sh <app-bundle> <project-dir>}"
