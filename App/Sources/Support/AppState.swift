@@ -438,7 +438,7 @@ final class AppState {
             lastError = "주소와 페어링 코드를 입력하세요."
             return
         }
-        busyMessage = "페어링 중…"
+        busyMessage = "페어링 중… (12초 안에 안 되면 자동 중단)"
         Task {
             do {
                 _ = try await ADB.pair(host: host, code: code)
@@ -446,14 +446,14 @@ final class AppState {
                 toast = "페어링 완료. 이제 연결할 수 있습니다."
             } catch {
                 busyMessage = nil
-                lastError = "페어링 실패: \(error.localizedDescription)"
+                lastError = Self.describeWirelessFailure(action: "페어링", host: host, error: error)
             }
         }
     }
 
     func connect(host: String) {
         guard !host.isEmpty else { return }
-        busyMessage = "연결 중…"
+        busyMessage = "연결 중… (8초 안에 안 되면 자동 중단)"
         Task {
             do {
                 _ = try await ADB.connect(host: host)
@@ -461,9 +461,22 @@ final class AppState {
                 toast = "\(host) 연결됨"
             } catch {
                 busyMessage = nil
-                lastError = "연결 실패: \(error.localizedDescription)"
+                lastError = Self.describeWirelessFailure(action: "연결", host: host, error: error)
             }
         }
+    }
+
+    /* 무선 실패 안내: 타임아웃/거부를 구분해 다음 조치를 알려준다.
+       (무한 "연결 중" 방지 — connect 8초, pair 12초 전용 타임아웃). */
+    private static func describeWirelessFailure(action: String, host: String, error: Error) -> String {
+        if case ProcessError.timedOut = error {
+            return "\(action) 시간 초과(\(host)) — 주소·포트를 확인하세요. 폰: 개발자 옵션 → 무선 디버깅이 켜져 있고 맥과 같은 네트워크여야 합니다. (VPN으로 붙는 경우 폰의 VPN IP:5555 사용)"
+        }
+        let raw = error.localizedDescription
+        if raw.contains("cannot connect") || raw.contains("Connection refused") {
+            return "\(action) 실패(\(host)) — 포트가 닫혀 있습니다. 폰의 무선 디버깅 화면에 나온 포트가 맞는지 확인하세요(포트는 다시 열 때마다 바뀝니다)."
+        }
+        return "\(action) 실패: \(raw)"
     }
 
     /// USB 기기를 무선으로 전환.

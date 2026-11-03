@@ -149,10 +149,13 @@ enum ADB {
 
     // MARK: 무선 연결
 
+    /* 무선 connect/pair는 대화형 액션이다 — 대상이 없으면 OS TCP 타임아웃까지
+       오래 묶이므로 짧은 전용 타임아웃을 건다(기본 30초는 "무한 연결중"으로 느껴짐). */
+
     /// Android 11+ 무선 디버깅 페어링(6자리 코드).
-    static func pair(host: String, code: String) async throws -> String {
+    static func pair(host: String, code: String, timeout: TimeInterval = 12) async throws -> String {
         let result = try await ProcessRunner.run(
-            Binaries.adb, arguments: ["pair", host, code], environment: env
+            Binaries.adb, arguments: ["pair", host, code], environment: env, timeout: timeout
         )
         // adb pair는 성공해도 exit code가 0이 아닌 케이스가 있어 출력 문구로 판정한다.
         let output = result.output
@@ -162,9 +165,9 @@ enum ADB {
         throw ADBError.failure(output)
     }
 
-    static func connect(host: String) async throws -> String {
+    static func connect(host: String, timeout: TimeInterval = 8) async throws -> String {
         let result = try await ProcessRunner.run(
-            Binaries.adb, arguments: ["connect", host], environment: env
+            Binaries.adb, arguments: ["connect", host], environment: env, timeout: timeout
         )
         let output = result.output
         if output.contains("connected") && !output.contains("cannot connect") {
