@@ -38,6 +38,16 @@ struct PairSheetView: View {
             }
         }
         .frame(width: 480, height: 460)
+        /* 진행 상태를 시트 안에서 보이게: 기존엔 메인 창 배너에만 뜨는데 시트가
+           그 위를 덮어 페어링/연결 진행이 안 보였다. 같은 StatusBanner를 시트 하단에도 둔다. */
+        .safeAreaInset(edge: .bottom) {
+            if appState.busyMessage != nil || appState.toast != nil || appState.lastError != nil {
+                StatusBanner()
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 4)
+                    .background(.ultraThinMaterial)
+            }
+        }
     }
 
     private var header: some View {
@@ -75,7 +85,7 @@ struct PairSheetView: View {
                 Spacer()
                 Button("페어링", action: pair)
                     .buttonStyle(.borderedProminent)
-                    .disabled(pairHost.isEmpty || pairCode.isEmpty)
+                    .disabled(pairHost.isEmpty || pairCode.isEmpty || isBusy)
             }
 
             Spacer()
@@ -107,7 +117,7 @@ struct PairSheetView: View {
                 Spacer()
                 Button("연결", action: connectDirect)
                     .buttonStyle(.borderedProminent)
-                    .disabled(connectHost.isEmpty)
+                    .disabled(connectHost.isEmpty || isBusy)
             }
             Spacer()
         }
@@ -136,10 +146,18 @@ struct PairSheetView: View {
                     Image(systemName: "wifi.router")
                         .font(.largeTitle)
                         .foregroundStyle(.tertiary)
-                    Text("발견된 기기가 없습니다.\n폰에서 무선 디버깅을 켜고 같은 Wi-Fi에 연결하세요.")
+                    Text("발견된 기기가 없습니다.\n폰에서 무선 디버깅을 켜고 맥과 같은 Wi-Fi에 연결하세요.")
                         .multilineTextAlignment(.center)
                         .font(.callout)
                         .foregroundStyle(.secondary)
+                    // mDNS는 같은 LAN에서만 동작 — VPN으로 붙은 기기가 있으면 그 사실을 안내(실측 사례)
+                    if vpnConnectedDeviceExists {
+                        Text("지금 VPN(Tailscale 등)으로 연결된 기기가 있습니다.\n자동 발견은 같은 와이파이에서만 동작하니, 'IP 직접 연결' 탭을 사용하세요.")
+                            .multilineTextAlignment(.center)
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .padding(.top, 4)
+                    }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -152,6 +170,7 @@ struct PairSheetView: View {
                         Button("연결") {
                             appState.connect(host: service.address)
                         }
+                        .disabled(isBusy)
                     }
                 }
                 .listStyle(.inset)
@@ -169,6 +188,16 @@ struct PairSheetView: View {
 
     private func reloadMdns() async {
         mdnsServices = (try? await ADB.mdnsServices()) ?? []
+    }
+
+    /// 진행 중(페어링/연결/전환)이면 액션 버튼 잠금 — 중복 실행 방지.
+    private var isBusy: Bool {
+        appState.busyMessage != nil
+    }
+
+    /// 현재 CGNAT(VPN) 대역으로 붙어 있는 무선 기기가 있는지 — 자동발견 불가 안내용.
+    private var vpnConnectedDeviceExists: Bool {
+        appState.devices.contains { $0.isVPNConnected }
     }
 
     private func pair() {

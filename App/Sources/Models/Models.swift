@@ -21,6 +21,16 @@ struct Device: Identifiable, Equatable, Sendable, Hashable {
     var isUSB: Bool { !serial.contains(":") }
     var displayModel: String { model ?? serial }
 
+    /// CGNAT 대역(100.64/10 — Tailscale 등 VPN)으로 연결된 무선 기기인지.
+    /// 자동발견(mDNS)이 안 되는 환경 안내에 사용(실측: VPN 연결은 mDNS 멀티캐스트가 못 넘어옴).
+    var isVPNConnected: Bool {
+        guard !isUSB else { return false }
+        let octets = serial.split(separator: ":").first?
+            .split(separator: ".").compactMap { Int($0) } ?? []
+        guard octets.count == 4 else { return false }
+        return octets[0] == 100 && (64...127).contains(octets[1])
+    }
+
     var stateBadge: String {
         switch state {
         case .online: return isUSB ? "USB" : "Wi-Fi"
