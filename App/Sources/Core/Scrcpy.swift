@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 /// scrcpy 세션 정의.
 /// 정책: 세션 = 하나의 scrcpy 프로세스. 미러(실화면)와 DeX 앱 창(가상 디스플레이)은 같은 러너로 실행.
@@ -18,12 +19,17 @@ struct ScrcpySession: Identifiable, @unchecked Sendable {
     let title: String
     let startedAt = Date()
 
-    init(id: String, deviceSerial: String, mode: Mode, title: String) {
+    /// 입양된 고아 세션이면 pid가 설정된다(우리가 spawn하지 않은 scrcpy — 앱 재시작 전 생존분).
+    /// 이 세션은 process 핸들이 없어 kill(pid)로 종료하고, onExit 이벤트도 없어 목록 정리는 호출부가 한다.
+    let externalPID: Int32?
+
+    init(id: String, deviceSerial: String, mode: Mode, title: String, externalPID: Int32? = nil) {
         self.id = id
         self.key = UUID().uuidString
         self.deviceSerial = deviceSerial
         self.mode = mode
         self.title = title
+        self.externalPID = externalPID
     }
 
     /* 정책: 같은 기기 미러를 재실행하면 같은 id의 새 세션이 등록되는데, 구 프로세스의
@@ -39,9 +45,21 @@ struct ScrcpySession: Identifiable, @unchecked Sendable {
     }
 
     func terminate() {
+        if let pid = externalPID {
+            kill(pid, SIGTERM)
+            return
+        }
         processLock.lock()
         defer { processLock.unlock() }
         process?.terminate()
+    }
+
+    /// 프로세스가 아직 살아 있는지(고아 세션용 — kill(pid,0) 검사).
+    var isProcessAlive: Bool {
+        if let pid = externalPID { return kill(pid, 0) == 0 }
+        processLock.lock()
+        defer { processLock.unlock() }
+        return process != nil
     }
 }
 

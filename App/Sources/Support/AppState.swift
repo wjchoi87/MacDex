@@ -71,6 +71,7 @@ final class AppState {
         guard monitorProcess == nil, monitorRestartTask == nil else { return }
         startDeviceMonitoring()
         startWirelessSweep()
+        adoptOrphanSessions()
     }
 
     /* 정책: adb 서버는 Mac의 다른 adb 클라이언트(홈브루/SDK 등)와 공유된다. 버전이 다른
@@ -128,6 +129,7 @@ final class AppState {
             while !Task.isCancelled, !isShuttingDown {
                 try? await Task.sleep(for: .seconds(20))
                 guard !isShuttingDown else { return }
+                pruneDeadExternalSessions()  // 사용자가 창을 직접 닫은 고아 세션 정리
                 let hosts = UserDefaults.standard.stringArray(forKey: Self.wirelessHostsKey) ?? []
                 let online = Set(devices.map(\.serial))
                 let missing = hosts.filter { !online.contains($0) }
@@ -348,12 +350,105 @@ final class AppState {
 
     func stopSession(_ session: ScrcpySession) {
         session.terminate()
+        // 고아 입양 세션은 onExit 이벤트가 없으므로 여기서 직접 목록 정리
+        if session.externalPID != nil {
+            sessions.removeAll { $0.key == session.key }
+            endStayAwakeIfLast(serial: session.deviceSerial)
+        }
     }
 
     func stopSessions(for serial: String) {
         for session in sessions where session.deviceSerial == serial {
             session.terminate()
         }
+        // 고아 입양분 즉시 정리(일반 세션은 onExit가 지운다)
+        sessions.removeAll { $0.deviceSerial == serial && $0.externalPID != nil }
+        endStayAwakeIfLast(serial: serial)
+    }
+
+    /* 변경 전 정책: 세션 목록은 앱 프로세스 메모리에만 있어서, 앱이 강제 종료되거나
+       재빌드로 재시작되면 살아남은 scrcpy 창(미러/DeX/앱)을 목록에서 볼 수도 닫을 수도 없었다.
+       변경 후 정책: 시작 시 이 번들의 scrcpy 경로로 떠 있는 프로세스와 CLI 세션 파일(pid)을
+       스캔해 세션으로 "입양"한다 — 목록에 보이고 닫기로 종료할 수 있다.
+       영향 범위: 앱 재시작 전후 창 관리. 입양 세션은 pid kill로 종료한다. */
+    private func adoptOrphanSessions() {
+        Task {
+            var found: [Int32: ScrcpySession] = [:]
+
+            // 1) 실행 중인 우리 scrcpy 프로세스(경로로 판별 — 다른 scrcpy와 구분)
+            if let result = try? await ProcessRunner.run(
+                URL(fileURLWithPath: "/bin/ps"),
+                arguments: ["-axo", "pid=,command="],
+                environment: Binaries.processEnvironment
+            ) {
+                for rawLine in result.stdout.split(separator: "\n") {
+                    let line = String(rawLine).trimmingCharacters(in: .whitespaces)
+                    guard line.hasPrefix(Binaries.scrcpy.path) else { continue }
+                    let parts = line.split(separator: " ").map(String.init)
+                    guard let pid = Int32(parts.first ?? "") else { continue }
+                    let args = Array(parts.dropFirst())
+
+                    guard let sIndex = args.firstIndex(of: "-s"), sIndex + 1 < args.count else { continue }
+                    let serial = args[sIndex + 1]
+
+                    let startApp = args.first(where: { $0.hasPrefix("--start-app=") })?
+                        .dropFirst("--start-app=".count).trimmingCharacters(in: CharacterSet(charactersIn: "+"))
+                    let hasNewDisplay = args.contains { $0.hasPrefix("--new-display") }
+
+                    let mode: ScrcpySession.Mode
+                    var package: String?
+                    if let startApp, !startApp.isEmpty {
+                        mode = .app
+                        package = startApp
+                    } else if hasNewDisplay {
+                        mode = .dex
+                    } else {
+                        mode = .mirror
+                    }
+                    let label: String
+                    switch mode {
+                    case .mirror: label = "미러링"
+                    case .app: label = "앱 창 (\(package ?? "?"))"
+                    case .dex: label = "DeX 데스크톱"
+                    }
+                    found[pid] = ScrcpySession(
+                        id: Scrcpy.makeID(serial: serial, mode: mode, package: package),
+                        deviceSerial: serial, mode: mode,
+                        title: "MacDroid · \(serial) \(label)",
+                        externalPID: pid
+                    )
+                }
+            }
+
+            // 살아 있는 것만 입양
+            var adopted = found.values.filter { $0.isProcessAlive }
+            guard !adopted.isEmpty else { return }
+
+            // 이미 등록된 세션(pid 보유)과 중복되지 않게
+            adopted.removeAll { orphan in
+                sessions.contains { $0.deviceSerial == orphan.deviceSerial && $0.id == orphan.id && $0.externalPID == nil }
+            }
+
+            // 입양 세션이 있는 기기는 stay_on이 켜져 있을 수 있다 — 마지막 세션 종료 시 0으로 복구되도록 기록
+            let serials = Set(adopted.map(\.deviceSerial))
+            for serial in serials where stayOnSaved[serial] == nil {
+                let current = try? await ADB.shell(serial: serial, "settings get global stay_on_while_plugged_in")
+                let value = Int(current?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "") ?? 0
+                if value != 0 { stayOnSaved[serial] = 0 }
+            }
+
+            sessions.append(contentsOf: adopted)
+            toast = "이전 실행의 창 \(adopted.count)개를 다시 관리합니다 (닫기로 종료 가능)"
+        }
+    }
+
+    /// 고아 입양 세션 중 프로세스가 죽은 것(사용자가 창을 직접 닫은 경우)을 목록에서 제거.
+    private func pruneDeadExternalSessions() {
+        let dead = sessions.filter { $0.externalPID != nil && !$0.isProcessAlive }
+        guard !dead.isEmpty else { return }
+        let deadKeys = Set(dead.map(\.key))
+        sessions.removeAll { deadKeys.contains($0.key) }
+        for session in dead { endStayAwakeIfLast(serial: session.deviceSerial) }
     }
 
     private func removeSession(id: String) {
