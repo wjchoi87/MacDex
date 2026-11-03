@@ -54,6 +54,8 @@ struct LauncherView: View {
                     Label("시스템 앱 포함", systemImage: "gearshape.2")
                 }
                 .toggleStyle(.checkbox)
+                // 툴바 첫 아이템이라 왼쪽에 붙음 — 좌우 여백 확보
+                .padding(.horizontal, 8)
                 .help("시스템 앱도 표시")
             }
             ToolbarItem(placement: .primaryAction) {
