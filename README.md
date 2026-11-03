@@ -68,6 +68,42 @@ ADB_SRC=/path/to/adb AAPT2_SRC=/path/to/aapt2 SCRCPY_SRC=/path/to/scrcpy ./scrip
 - **Go wireless** — with a USB device selected, click *Switch to wireless*, then unplug the cable
 - **Settings** — quality presets, codec/bitrate/resolution/fps, audio, virtual display resolution & DPI, uhid advanced input
 - Shortcuts inside mirroring windows are scrcpy's own (`MOD+F` fullscreen, …) — see `scrcpy --help`
+- While any DeX/mirror session is running, the phone is kept from sleeping (`stay_on_while_plugged_in`); your previous setting is restored when the last session closes
+
+## CLI for agents and scripts
+
+The same build produces `macdroid`, a zero-dependency CLI that lets AI agents and scripts drive the device — the full automation loop `screenshot → decide → tap/text` works:
+
+```bash
+# build it (same repo)
+xcodebuild -project MacDroid.xcodeproj -scheme macdroid -configuration Debug build \
+  -derivedDataPath build/DerivedData
+M=build/DerivedData/Build/Products/Debug/macdroid
+
+$M devices --json                       # [{"serial": "...", "state": "device", "connection": "usb"}]
+$M info <serial> --json                 # model, Android version, battery, screen
+$M app list <serial> --json             # installed apps (add --labels to resolve names)
+$M app launch <serial> com.example.app --json
+# → {"displayId": 11, "session": "...", "pid": ...}   ← use displayId for -d below
+$M screenshot <serial> shot.png -d 11   # capture that virtual display
+$M tap <serial> 960 400 -d 11           # tap on that display
+$M text <serial> "hello world"          # ASCII text injection
+$M key <serial> back                    # back/home/enter/wakeup/power/volume_up... or a keycode
+$M app stop <serial> com.example.app    # (or: app stop <serial> --all)
+$M mirror start <serial>                # plain screen mirroring window
+$M mirror stop <serial>
+$M push <serial> file.pdf               # → /sdcard/Download/
+$M pull <serial> /sdcard/DCIM/photo.jpg .
+$M connect 192.168.0.10:5555            # wireless
+$M pair 192.168.0.10:37123 123456
+```
+
+Exit codes: `0` success · `1` runtime failure · `2` usage error. All queries support `--json`.
+
+Notes:
+- If the phone screen is off/locked, `input` is silently ignored by Android — run `macdroid key <serial> wakeup` first
+- Sessions automatically keep the phone awake while plugged in (USB or charging); on battery Android will still sleep the device eventually
+- `screencap -d` accepts either the logical display id or (on some OEM builds) a SurfaceFlinger token — the CLI tries both automatically
 
 ## How it works
 

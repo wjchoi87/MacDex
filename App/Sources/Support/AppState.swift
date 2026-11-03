@@ -27,6 +27,30 @@ final class AppState {
     private var monitorProcess: StreamingProcess?
     private var detailTasks: [String: Task<Void, Never>] = [:]
 
+    /// 기기별 절전 방지(stay_on) 이전값 — DeX/미러 세션 동안 기기가 잠들지 않게 했다가 복구.
+    private var stayOnSaved: [String: Int] = [:]
+
+    /// 세션이 시작될 때: 이 기기의 첫 세션이면 절전 방지를 켜고 이전값을 저장.
+    private func beginStayAwakeIfNeeded(serial: String) {
+        guard !sessions.contains(where: { $0.deviceSerial == serial }),
+              stayOnSaved[serial] == nil else { return }
+        Task {
+            if let previous = await ADB.enableStayAwake(serial: serial) {
+                stayOnSaved[serial] = previous
+            }
+        }
+    }
+
+    /// 세션이 모두 끝났을 때: 절전 방지를 원래값으로 복구.
+    private func endStayAwakeIfLast(serial: String) {
+        guard !sessions.contains(where: { $0.deviceSerial == serial }),
+              let previous = stayOnSaved[serial] else { return }
+        stayOnSaved[serial] = nil
+        Task {
+            await ADB.restoreStayAwake(serial: serial, previous: previous)
+        }
+    }
+
     private init() {
         SessionEvents.shared.addHandler { [weak self] sessionID in
             Task { @MainActor in
@@ -130,6 +154,7 @@ final class AppState {
             title: "MacDroid · \(device.displayModel) 미러링"
         )
         let args = Scrcpy.mirrorArguments(device: device, settings: settings, audioAllowed: true)
+        beginStayAwakeIfNeeded(serial: device.serial)
         do {
             let process = try Scrcpy.launch(arguments: args, sessionID: session.key)
             session.attach(process)
@@ -161,6 +186,7 @@ final class AppState {
         let audioAllowed = !sessions.contains { $0.deviceSerial == device.serial }
         let args = Scrcpy.appArguments(device: device, app: app, settings: settings,
                                        audioAllowed: audioAllowed, forceNewInstance: forceNewInstance)
+        beginStayAwakeIfNeeded(serial: device.serial)
         do {
             let process = try Scrcpy.launch(arguments: args, sessionID: session.key)
             session.attach(process)
@@ -192,7 +218,11 @@ final class AppState {
 
     private func removeSession(id: String) {
         // id 파라미터는 1회성 key(UUID)다 — 동일 id 재실행 시 신세션 오삭제 방지
+        let ended = sessions.first { $0.key == id }
         sessions.removeAll { $0.key == id }
+        if let ended {
+            endStayAwakeIfLast(serial: ended.deviceSerial)
+        }
     }
 
     // MARK: 무선 연결

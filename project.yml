@@ -39,3 +39,25 @@ targets:
       - name: Install Vendor Binaries
         script: |
           "$PROJECT_DIR/scripts/install-vendor.sh" "$BUILT_PRODUCTS_DIR/$WRAPPER_NAME" "$PROJECT_DIR"
+
+  # 에이전트/스크립트용 CLI — GUI Core(ADB/Scrcpy/AppCatalog)를 그대로 공유한다.
+  macdroid:
+    type: tool
+    platform: macOS
+    sources:
+      - path: App/Sources/Core
+      - path: App/Sources/Models
+      - path: App/Sources/Support/Binaries.swift
+      - path: App/Sources/Support/ProcessRunner.swift
+      - path: CLI/Sources
+    settings:
+      base:
+        PRODUCT_NAME: macdroid
+        PRODUCT_BUNDLE_IDENTIFIER: kr.macdroid.cli
+    postBuildScripts:
+      # 실행 파일 옆에 bin/lib/share를 깔아 Binaries가 그대로 해석하게 한다.
+      - name: Install Vendor Binaries (CLI)
+        script: |
+          "$PROJECT_DIR/scripts/install-vendor.sh" "$TARGET_BUILD_DIR" "$PROJECT_DIR"
+    scheme:
+      testTargets: []

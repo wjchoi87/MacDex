@@ -221,6 +221,24 @@ enum ADB {
         return services
     }
 
+    // MARK: 절전 방지 (DeX 세션 동안 기기 잠금 방지)
+
+    /* 정책: DeX/미러 세션이 살아 있는 동안 stay_on_while_plugged_in을 모든 전원(7)으로
+       올려 기기가 잠들지 않게 한다. 물리 화면은 --turn-screen-off로 꺼둘 수 있고,
+       꺼진 상태에서도 전원 연결 중에는 시스템이 잠들지 않는다(input 주입 가능 유지).
+       배터리 구동 시 절전까지 막는 것은 안드로이드 정책상 불가 → key wakeup 보조.
+       이전 값은 반환해 세션 종료 시 복구한다(사용자 설정 존중). */
+    static func enableStayAwake(serial: String) async -> Int? {
+        let previous = try? await shell(serial: serial, "settings get global stay_on_while_plugged_in")
+        let prev = Int(previous?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "") ?? 0
+        _ = try? await shell(serial: serial, "settings put global stay_on_while_plugged_in 7")
+        return prev
+    }
+
+    static func restoreStayAwake(serial: String, previous: Int) async {
+        _ = try? await shell(serial: serial, "settings put global stay_on_while_plugged_in \(previous)")
+    }
+
     // MARK: 파일 전송
 
     static func push(serial: String, file: URL, destination: String = "/sdcard/Download/") async throws {
@@ -231,6 +249,93 @@ enum ADB {
             environment: env
         )
         guard result.succeeded else { throw ADBError.failure(result.output) }
+    }
+
+    static func pull(serial: String, remote: String, to local: URL) async throws {
+        let result = try await ProcessRunner.run(
+            Binaries.adb,
+            arguments: ["-s", serial, "pull", remote, local.path],
+            environment: env
+        )
+        guard result.succeeded else { throw ADBError.failure(result.output) }
+    }
+
+    // MARK: 화면/입력 (에이전트 CLI용)
+
+    /// 현재 존재하는 디스플레이 id 집합 — scrcpy 가상디스플레이 감지(diff)용.
+    static func displayIds(serial: String) async throws -> [Int] {
+        let out = try await shell(serial: serial, "dumpsys display | grep -oE 'mDisplayId=[0-9]+'")
+        return out.split(separator: "\n").compactMap {
+            Int($0.trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "mDisplayId=", with: ""))
+        }
+    }
+
+    /// 지정 디스플레이(기본: 물리 화면) 캡처 PNG 데이터.
+    /* 정책: screencap -d는 빌드에 따라 논리 디스플레이 id를 받기도(SF 토큰만 받기도 한다
+       — One UI 17 실측: 논리 id '10' 거부, SurfaceFlinger 토큰은 성공).
+       따라서 논리 id로 시도 → PNG가 아니면 SF 토큰으로 대응해 재시도한다. */
+    static func screenshotData(serial: String, displayId: Int?) async throws -> Data {
+        func capture(_ idString: String) async throws -> Data {
+            try await ProcessRunner.runData(
+                Binaries.adb,
+                arguments: ["-s", serial, "exec-out", "screencap", "-p", "-d", idString],
+                environment: env
+            )
+        }
+        if let displayId {
+            if let data = try? await capture("\(displayId)"), data.isPNG {
+                return data
+            }
+            if let token = try await surfaceFlingerToken(serial: serial, logicalId: displayId) {
+                do {
+                    let data = try await capture(token)
+                    if data.isPNG { return data }
+                } catch {}
+            }
+            throw ADBError.failure("디스플레이 \(displayId) 캡처 실패 (screencap -d)")
+        }
+        let data = try await ProcessRunner.runData(
+            Binaries.adb, arguments: ["-s", serial, "exec-out", "screencap", "-p"], environment: env
+        )
+        guard data.isPNG else { throw ADBError.failure("screencap 실패 — 기기가 잠겨 있거나 화면이 꺼져 있을 수 있음") }
+        return data
+    }
+
+    /// 논리 디스플레이 id에 대응하는 SurfaceFlinger 디스플레이 토큰.
+    /// 대응 규칙: SF 가상디스플레이 토큰(덤프 등장순=생성순) ↔ 논리 가상 id(오름차순) 인덱스 페어.
+    /// 토큰은 UInt64 범위라서(Int64 초과 — 실측) 문자열로 돌려준다.
+    static func surfaceFlingerToken(serial: String, logicalId: Int) async throws -> String? {
+        guard let logicals = try? await displayIds(serial: serial) else { return nil }
+        let virtuals = logicals.filter { $0 != 0 }.sorted()
+        guard let index = virtuals.firstIndex(of: logicalId) else { return nil }
+
+        let sfOut = try await shell(
+            serial: serial,
+            "dumpsys SurfaceFlinger --display-id | grep 'Virtual display' | grep -oE '^Display [0-9]+'"
+        )
+        let tokens = sfOut.split(separator: "\n").compactMap { line -> UInt64? in
+            let parts = line.split(separator: " ")
+            guard parts.count >= 2, let n = UInt64(parts[1]) else { return nil }
+            return n
+        }
+        guard index < tokens.count else { return nil }
+        return String(tokens[index])
+    }
+
+    /// 입력 주입(tap/swipe/text/keyevent). displayId가 있으면 그 디스플레이로.
+    static func input(serial: String, displayId: Int?, _ inputArgs: [String]) async throws {
+        var shellArgs = ["-s", serial, "shell"]
+        if let displayId { shellArgs += ["input", "-d", "\(displayId)"] } else { shellArgs += ["input"] }
+        shellArgs += inputArgs
+        let result = try await ProcessRunner.run(Binaries.adb, arguments: shellArgs, environment: env)
+        guard result.succeeded else { throw ADBError.failure(result.output) }
+    }
+
+    /// adb shell 인자용 sh 인용 — adb가 인자들을 공백으로 합쳐 디바이스 sh가 다시 파싱하므로,
+    /// 전체를 작은따옴표로 감싸고 내부 따옴표만 탈출한다(공백/특수문자 안전).
+    static func shellQuoted(_ text: String) -> String {
+        "'" + text.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
     // MARK: 설치된 앱
@@ -252,6 +357,13 @@ enum ADB {
             }
         }
         return apps.sorted { $0.package < $1.package }
+    }
+}
+
+extension Data {
+    /// PNG 매직 헤더 여부 — screencap 실패 시 에러 텍스트가 stdout으로 오는 것을 구분.
+    var isPNG: Bool {
+        count > 8 && prefix(4).elementsEqual([0x89, 0x50, 0x4E, 0x47])
     }
 }
 

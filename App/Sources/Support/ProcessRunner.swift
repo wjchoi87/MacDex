@@ -12,24 +12,30 @@ struct ProcessResult: Sendable {
 
 enum ProcessError: Error, LocalizedError {
     case launchFailed(String)
+    case timedOut(String, seconds: Int)
 
     var errorDescription: String? {
-        if case .launchFailed(let message) = self { return message }
-        return nil
+        switch self {
+        case .launchFailed(let message): return message
+        case .timedOut(let name, let seconds): return "\(name)이(가) \(seconds)초 내에 응답하지 않았습니다"
+        }
     }
 }
 
 /// 비동기 프로세스 실행기.
-/// 정책: stdout/stderr를 FileHandle.bytes(비동기 시퀀스)로 동시에 소비한다.
-///   파이프 버퍼(64KB)가 찬 채 한쪽만 동기 읽기하면 교착이 생기는 고전적 함 때문에,
-///   블로킹 read를 협조 스레드 풀에서 쓰지 않는다.
+/// 정책:
+///   1) stdout/stderr를 FileHandle.bytes(비동기 시퀀스)로 동시에 소비한다.
+///      파이프 버퍼(64KB)가 찬 채 한쪽만 동기 읽기하면 교착이 생기는 고전적 함 때문.
+///   2) 모든 실행에 타임아웃이 있다(기본 30초). adb 서버가 일시 멈추면 waitUntilExit가
+///      영원히 묶는 사고를 실측했고, CLI 전체가 멈추는 치명적 결함이라 강제 종료 후 에러.
 enum ProcessRunner {
 
     static func run(
         _ executable: URL,
         arguments: [String],
         environment: [String: String]? = nil,
-        priority: TaskPriority = .utility
+        priority: TaskPriority = .utility,
+        timeout: TimeInterval = 30
     ) async throws -> ProcessResult {
         try await Task.detached(priority: priority) {
             let process = Process()
@@ -43,11 +49,17 @@ enum ProcessRunner {
             do { try process.run() } catch {
                 throw ProcessError.launchFailed("\(executable.lastPathComponent): \(error.localizedDescription)")
             }
+            let killer = TimeoutKiller(process: process)
+            killer.arm(seconds: timeout)
+            defer { killer.cancel() }
             // 두 파이프를 동시에 소비 후 종료 대기
             async let out = readAll(outPipe.fileHandleForReading)
             async let err = readAll(errPipe.fileHandleForReading)
             let (outData, errData) = try await (out, err)
             process.waitUntilExit()
+            if killer.didFire {
+                throw ProcessError.timedOut(executable.lastPathComponent, seconds: Int(timeout))
+            }
             return ProcessResult(
                 status: process.terminationStatus,
                 stdout: String(data: outData, encoding: .utf8) ?? "",
@@ -59,7 +71,8 @@ enum ProcessRunner {
     static func runData(
         _ executable: URL,
         arguments: [String],
-        environment: [String: String]? = nil
+        environment: [String: String]? = nil,
+        timeout: TimeInterval = 30
     ) async throws -> Data {
         try await Task.detached(priority: .utility) {
             let process = Process()
@@ -72,10 +85,57 @@ enum ProcessRunner {
             do { try process.run() } catch {
                 throw ProcessError.launchFailed("\(executable.lastPathComponent): \(error.localizedDescription)")
             }
+            let killer = TimeoutKiller(process: process)
+            killer.arm(seconds: timeout)
+            defer { killer.cancel() }
             let data = try await readAll(outPipe.fileHandleForReading)
             process.waitUntilExit()
+            if killer.didFire {
+                throw ProcessError.timedOut(executable.lastPathComponent, seconds: Int(timeout))
+            }
             return data
         }.value
+    }
+
+    /// 타임아웃에 도달하면 프로세스를 강제 종료하는 타이머.
+    private final class TimeoutKiller: @unchecked Sendable {
+        private weak var process: Process?
+        private let lock = NSLock()
+        private var fired = false
+        private var workItem: DispatchWorkItem?
+
+        init(process: Process) {
+            self.process = process
+        }
+
+        var didFire: Bool {
+            lock.lock(); defer { lock.unlock() }
+            return fired
+        }
+
+        func arm(seconds: TimeInterval) {
+            let item = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.lock.lock()
+                self.fired = true
+                let target = self.process
+                self.lock.unlock()
+                if let target, target.isRunning {
+                    target.terminate()
+                }
+            }
+            lock.lock()
+            workItem = item
+            lock.unlock()
+            DispatchQueue.global().asyncAfter(deadline: .now() + seconds, execute: item)
+        }
+
+        func cancel() {
+            lock.lock()
+            workItem?.cancel()
+            workItem = nil
+            lock.unlock()
+        }
     }
 
     private static func readAll(_ handle: FileHandle) async throws -> Data {
