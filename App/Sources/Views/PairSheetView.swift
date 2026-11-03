@@ -1,0 +1,181 @@
+import SwiftUI
+
+/// 무선 연결 시트 — 3가지 경로(페어링 코드 / IP 직접 / mDNS 자동 발견).
+struct PairSheetView: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.dismiss) private var dismiss
+
+    enum Tab: String, CaseIterable, Identifiable {
+        case code = "페어링 코드"
+        case ip = "IP 직접 연결"
+        case mdns = "자동 발견"
+
+        var id: String { rawValue }
+    }
+
+    @State private var tab: Tab = .code
+    @State private var pairHost = ""
+    @State private var pairCode = ""
+    @State private var connectHost = ""
+    @State private var mdnsServices: [MdnsService] = []
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+
+            Picker("연결 방식", selection: $tab) {
+                ForEach(Tab.allCases) { t in
+                    Text(t.rawValue).tag(t)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 24)
+
+            switch tab {
+            case .code: pairCodeTab
+            case .ip: directTab
+            case .mdns: mdnsTab
+            }
+        }
+        .frame(width: 480, height: 460)
+    }
+
+    private var header: some View {
+        VStack(spacing: 6) {
+            Text("무선 기기 연결")
+                .font(.title3.bold())
+            Text("폰: 설정 → 개발자 옵션 → 무선 디버깅")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 20)
+    }
+
+    // MARK: 페어링 코드
+
+    private var pairCodeTab: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("무선 디버깅 화면에서 '기기 페어링'을 열면 나오는 주소와 6자리 코드를 입력하세요. 폰과 맥이 같은 Wi-Fi에 있어야 합니다.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            LabeledContent("페어링 주소") {
+                TextField("예: 192.168.0.10:37001", text: $pairHost)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 220)
+            }
+            LabeledContent("코드") {
+                TextField("6자리", text: $pairCode)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 120)
+                    .onSubmit(pair)
+            }
+
+            HStack {
+                Spacer()
+                Button("페어링", action: pair)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(pairHost.isEmpty || pairCode.isEmpty)
+            }
+
+            Spacer()
+            Label("페어링은 기기마다 한 번만 필요합니다. 이후에는 'IP 직접 연결'이나 '자동 발견'로 즉시 연결됩니다.",
+                  systemImage: "info.circle")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
+    }
+
+    // MARK: IP 직접
+
+    private var directTab: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("무선 디버깅 화면의 IP 주소와 포트(예: 192.168.0.10:39523) 또는 이미 페어링된 기기의 5555 포트로 연결합니다.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            LabeledContent("주소") {
+                TextField("예: 192.168.0.10:5555", text: $connectHost)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 220)
+                    .onSubmit(connectDirect)
+            }
+
+            HStack {
+                Spacer()
+                Button("연결", action: connectDirect)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(connectHost.isEmpty)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
+    }
+
+    // MARK: mDNS
+
+    private var mdnsTab: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("같은 네트워크에서 발견된 기기")
+                    .font(.headline)
+                Spacer()
+                Button {
+                    Task { await reloadMdns() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .help("다시 찾기")
+            }
+
+            if mdnsServices.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "wifi.router")
+                        .font(.largeTitle)
+                        .foregroundStyle(.tertiary)
+                    Text("발견된 기기가 없습니다.\n폰에서 무선 디버깅을 켜고 같은 Wi-Fi에 연결하세요.")
+                        .multilineTextAlignment(.center)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(mdnsServices) { service in
+                    HStack {
+                        Image(systemName: "iphone.radiowaves.left.and.right")
+                            .foregroundStyle(.tint)
+                        Text(service.name)
+                        Spacer()
+                        Button("연결") {
+                            appState.connect(host: service.address)
+                        }
+                    }
+                }
+                .listStyle(.inset)
+            }
+        }
+        .padding(24)
+        .task {
+            await reloadMdns()
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(5))
+                await reloadMdns()
+            }
+        }
+    }
+
+    private func reloadMdns() async {
+        mdnsServices = (try? await ADB.mdnsServices()) ?? []
+    }
+
+    private func pair() {
+        appState.pair(host: pairHost, code: pairCode)
+    }
+
+    private func connectDirect() {
+        appState.connect(host: connectHost)
+    }
+}

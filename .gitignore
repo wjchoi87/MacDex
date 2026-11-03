@@ -1,0 +1,15 @@
+# Xcode
+build/
+DerivedData/
+*.xcodeproj
+!*.xcodeproj/README.md
+
+# 생성된 vendor 바이너리 (scripts/fetch-vendor.sh로 재생성)
+Vendor/
+
+# macOS
+.DS_Store
+
+# 임시
+*.log
+tmp/

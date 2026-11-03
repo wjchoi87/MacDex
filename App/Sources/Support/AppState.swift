@@ -1,0 +1,263 @@
+import Foundation
+import SwiftUI
+
+/// 앱 전역 상태 저장소.
+/// 정책: 모든 상태 변이는 MainActor. adb/scrcpy 비동기 결과만 받아들인다.
+@MainActor
+@Observable
+final class AppState {
+
+    static let shared = AppState()
+
+    // MARK: 상태
+
+    private(set) var devices: [Device] = []
+    private(set) var sessions: [ScrcpySession] = []
+    var settings: MirrorSettings = MirrorSettings.load() {
+        didSet { settings.save() }
+    }
+
+    // 진행/에러 표시
+    var lastError: String?
+    var busyMessage: String?
+    var toast: String?
+
+    var hasRunningSession: Bool { !sessions.isEmpty }
+
+    private var monitorProcess: StreamingProcess?
+    private var detailTasks: [String: Task<Void, Never>] = [:]
+
+    private init() {
+        SessionEvents.shared.addHandler { [weak self] sessionID in
+            Task { @MainActor in
+                self?.removeSession(id: sessionID)
+            }
+        }
+    }
+
+    // MARK: 시작/종료
+
+    func start() {
+        guard monitorProcess == nil else { return }
+        Task {
+            // adb 서버 기동(첫 실행 지연 방지) 후 감시 시작
+            _ = try? await ProcessRunner.run(
+                Binaries.adb, arguments: ["start-server"], environment: Binaries.processEnvironment
+            )
+            do {
+                monitorProcess = try await ADB.trackDevices { [weak self] snapshot in
+                    Task { @MainActor in
+                        self?.applyDeviceSnapshot(snapshot)
+                    }
+                }
+            } catch {
+                self.lastError = "기기 감시 시작 실패: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    /// 앱 종료 시 모든 scrcpy 세션 정리(고아 프로세스 방지).
+    func shutdownAll() {
+        for session in sessions {
+            session.terminate()
+        }
+        monitorProcess?.terminate()
+        sessions.removeAll()
+    }
+
+    // MARK: 기기 스냅샷 적용
+
+    private func applyDeviceSnapshot(_ snapshot: [Device]) {
+        let old = devices
+        var merged: [Device] = []
+        for newDevice in snapshot {
+            // 기존 상세 정보 보존(같은 시리얼)
+            if let previous = old.first(where: { $0.serial == newDevice.serial }) {
+                var d = newDevice
+                d.model = previous.model
+                d.brand = previous.brand
+                d.manufacturer = previous.manufacturer
+                d.androidVersion = previous.androidVersion
+                d.sdkInt = previous.sdkInt
+                d.screenSize = previous.screenSize
+                if newDevice.state == .online, previous.state != .online || previous.batteryLevel == nil {
+                    scheduleDetailFetch(for: d)
+                }
+                merged.append(d)
+            } else {
+                merged.append(newDevice)
+                if newDevice.state == .online {
+                    scheduleDetailFetch(for: newDevice)
+                }
+            }
+        }
+        // 사라진 기기의 세션은 scrcpy가 스스로 종료함(onExit → removeSession). 여기선 상태만 정리.
+        devices = merged
+    }
+
+    private func scheduleDetailFetch(for device: Device) {
+        guard detailTasks[device.serial] == nil else { return }
+        detailTasks[device.serial] = Task {
+            let detailed = await ADB.fillDeviceDetails(device)
+            if let index = devices.firstIndex(where: { $0.serial == detailed.serial }) {
+                devices[index] = detailed
+            }
+            detailTasks[detailed.serial] = nil
+        }
+    }
+
+    func refreshDevice(_ device: Device) {
+        var d = device
+        d.batteryLevel = nil
+        scheduleDetailFetch(for: d)
+    }
+
+    func device(for serial: String) -> Device? {
+        devices.first { $0.serial == serial }
+    }
+
+    // MARK: 세션 실행
+
+    /// 실화면 미러. 이미 떠 있는 미러가 있으면 먼저 종료(이중 미러 금지 정책).
+    func launchMirror(for device: Device) {
+        let existing = sessions.first { $0.deviceSerial == device.serial && $0.mode == .mirror }
+        existing?.terminate()
+
+        var session = ScrcpySession(
+            id: Scrcpy.makeID(serial: device.serial, mode: .mirror, package: nil),
+            deviceSerial: device.serial,
+            mode: .mirror,
+            title: "MacDroid · \(device.displayModel) 미러링"
+        )
+        let args = Scrcpy.mirrorArguments(device: device, settings: settings, audioAllowed: true)
+        do {
+            let process = try Scrcpy.launch(arguments: args, sessionID: session.key)
+            session.attach(process)
+            sessions.removeAll { $0.id == session.id }
+            sessions.append(session)
+        } catch {
+            lastError = "미러링 시작 실패: \(error.localizedDescription)"
+        }
+    }
+
+    /// DeX 앱 창(가상 디스플레이). 같은 앱 창이 이미 있으면 새로 띄우지 않는다.
+    func launchAppWindow(for device: Device, app: AndroidApp) {
+        let id = Scrcpy.makeID(serial: device.serial, mode: .app, package: app.package)
+        if sessions.contains(where: { $0.id == id }) { return }
+
+        var session = ScrcpySession(
+            id: id,
+            deviceSerial: device.serial,
+            mode: .app,
+            title: "MacDroid · \(app.displayLabel)"
+        )
+        // 오디오 중복 방지: 이 기기에 이미 오디오 켜진 세션이 있으면 이번 창은 무음
+        let audioAllowed = !sessions.contains { $0.deviceSerial == device.serial }
+        let args = Scrcpy.appArguments(device: device, app: app, settings: settings, audioAllowed: audioAllowed)
+        do {
+            let process = try Scrcpy.launch(arguments: args, sessionID: session.key)
+            session.attach(process)
+            sessions.append(session)
+        } catch {
+            lastError = "앱 창 실행 실패: \(error.localizedDescription)"
+        }
+    }
+
+    func stopSession(_ session: ScrcpySession) {
+        session.terminate()
+    }
+
+    func stopSessions(for serial: String) {
+        for session in sessions where session.deviceSerial == serial {
+            session.terminate()
+        }
+    }
+
+    private func removeSession(id: String) {
+        // id 파라미터는 1회성 key(UUID)다 — 동일 id 재실행 시 신세션 오삭제 방지
+        sessions.removeAll { $0.key == id }
+    }
+
+    // MARK: 무선 연결
+
+    func pair(host: String, code: String) {
+        guard !host.isEmpty, !code.isEmpty else {
+            lastError = "주소와 페어링 코드를 입력하세요."
+            return
+        }
+        busyMessage = "페어링 중…"
+        Task {
+            do {
+                _ = try await ADB.pair(host: host, code: code)
+                busyMessage = nil
+                toast = "페어링 완료. 이제 연결할 수 있습니다."
+            } catch {
+                busyMessage = nil
+                lastError = "페어링 실패: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    func connect(host: String) {
+        guard !host.isEmpty else { return }
+        busyMessage = "연결 중…"
+        Task {
+            do {
+                _ = try await ADB.connect(host: host)
+                busyMessage = nil
+                toast = "\(host) 연결됨"
+            } catch {
+                busyMessage = nil
+                lastError = "연결 실패: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    /// USB 기기를 무선으로 전환.
+    func enableWireless(for device: Device) {
+        busyMessage = "무선 모드로 전환 중… (몇 초 걸림)"
+        Task {
+            do {
+                let host = try await ADB.enableWireless(serial: device.serial)
+                busyMessage = nil
+                toast = "무선 연결 완료: \(host) — USB 케이블을 뽑아도 됩니다"
+            } catch {
+                busyMessage = nil
+                lastError = "무선 전환 실패: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    // MARK: 파일 전송
+
+    func pushFiles(_ files: [URL], to device: Device) {
+        guard !files.isEmpty else { return }
+        busyMessage = "파일 전송 중… \(files.count)개"
+        Task {
+            var failures: [String] = []
+            for file in files {
+                do {
+                    try await ADB.push(serial: device.serial, file: file)
+                } catch {
+                    failures.append(file.lastPathComponent)
+                }
+            }
+            busyMessage = nil
+            if failures.isEmpty {
+                toast = "전송 완료: 폰의 Download 폴더에 저장됨"
+            } else {
+                lastError = "전송 실패: \(failures.joined(separator: ", "))"
+            }
+        }
+    }
+
+    // MARK: UI 헬퍼
+
+    func showError(_ message: String) {
+        lastError = message
+    }
+
+    func clearToast() {
+        toast = nil
+    }
+}
