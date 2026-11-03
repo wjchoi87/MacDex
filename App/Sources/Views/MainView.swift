@@ -49,12 +49,6 @@ struct MainView: View {
         .onReceive(NotificationCenter.default.publisher(for: .macdroidOpenPair)) { _ in
             activeSheet = .pair
         }
-        // DeX 데스크톱 실행 완료 → 독 패널 창 열기(모니터 창과 세트)
-        .onReceive(NotificationCenter.default.publisher(for: .macdroidOpenDexDock)) { note in
-            if let serial = note.object as? String {
-                openWindow(id: "dexdock", value: serial)
-            }
-        }
         .overlay(alignment: .bottom) {
             StatusBanner()
         }

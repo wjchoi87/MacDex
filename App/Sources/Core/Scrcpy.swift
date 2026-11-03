@@ -110,26 +110,18 @@ enum Scrcpy {
 
     /// DeX 앱 창: 앱 전용 가상 디스플레이에서 실행(폰 화면과 독립).
     /// forceNewInstance: scrcpy '+' 프리픽스로 새 인스턴스 강제(이미 실행 중인 앱의 이중 창).
+    /// windowOrigin: 데스크톱 계단식 배치용 초기 창 위치(맥에서 앱 여는 느낌).
     static func appArguments(device: Device, app: AndroidApp, settings: MirrorSettings, audioAllowed: Bool,
-                             forceNewInstance: Bool = false) -> [String] {
+                             forceNewInstance: Bool = false,
+                             windowOrigin: (x: Int, y: Int)? = nil) -> [String] {
         var args = commonArgs(device: device, settings: settings, audioAllowed: audioAllowed)
         let vd = settings.virtualDisplay
         args += ["--new-display=\(vd.width)x\(vd.height)/\(vd.density)"]
         args += ["--start-app=\(forceNewInstance ? "+" : "")\(app.package)"]
         args += ["--window-title", "MacDroid · \(app.displayLabel)"]
-        return args
-    }
-
-    /// DeX 데스크톱: 빈 가상 디스플레이를 띄우고, 호출부가 그 위에 삼성 DeX 런처
-    /// (com.honeyspace.dexservice.SecondaryLauncher)를 am start로 올린다.
-    /// 실측(SM-S936N, One UI): 가상 디스플레이 + SecondaryLauncher = 작업표시줄·배경화면이
-    /// 있는 완전한 DeX 데스크톱이 뜬다. 여기선 디스플레이만 만들고(창 = DeX 화면),
-    /// 앱은 --start-app 대신 am start --display <id>로 띄운다.
-    static func dexArguments(device: Device, settings: MirrorSettings, audioAllowed: Bool) -> [String] {
-        var args = commonArgs(device: device, settings: settings, audioAllowed: audioAllowed)
-        let vd = settings.virtualDisplay
-        args += ["--new-display=\(vd.width)x\(vd.height)/\(vd.density)"]
-        args += ["--window-title", "MacDroid · \(device.displayModel) DeX"]
+        if let origin = windowOrigin {
+            args += ["--window-x", "\(origin.x)", "--window-y", "\(origin.y)"]
+        }
         return args
     }
 

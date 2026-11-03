@@ -126,13 +126,13 @@ struct DeviceDetailView: View {
                              prominent: device.state == .online) {
                     appState.launchMirror(for: device)
                 }
-                /* 정책: DeX 데스크톱은 기기 무관(우리만의 DeX — 독 + 가상 디스플레이).
-                   삼성에서는 DeX 런처(작업표시줄)가 추가로 뜬다. */
+                /* 정책: DeX 데스크톱 = MacDroid 데스크톱 창(맥식 셸 — 메뉴바·독·런치패드).
+                   앱은 독/런치패드에서 열리며 각자 독립 창으로 뜬다. 기기 무관. */
                 ActionButton(title: "DeX 데스크톱", icon: "dock.rectangle",
                              prominent: device.state == .online) {
-                    appState.launchDexDesktop(for: device)
+                    openWindow(id: "macdroid.desktop", value: device.serial)
                 }
-                .help("DeX 모니터 창 + DeX 독을 띄웁니다 — 독에서 앱을 골라 DeX 화면에서 쓰세요")
+                .help("맥 스타일 데스크톱 환경(메뉴바·독·런치패드)을 띄웁니다 — 앱은 각자 창으로 열립니다")
             }
             GridRow {
                 ActionButton(title: "DeX 앱 런처", icon: "square.grid.2x2") {

@@ -14,10 +14,10 @@ final class AppState {
     private(set) var devices: [Device] = []
     private(set) var sessions: [ScrcpySession] = []
 
-    /// DeX 데스크톱 가상 디스플레이 id(기기별) — 독의 앱 실행/내비게이션 대상.
-    private(set) var dexDisplays: [String: Int] = [:]
-    /// DeX 독에서 이 모니터에 열어본 앱(순서 유지, 최근 것이 마지막) — 독의 "열린 앱" 목록.
+    /// 데스크톱 독의 "최근 앱"(기기별, 최근 것이 마지막, 최대 8개).
     private(set) var dexOpenedApps: [String: [AndroidApp]] = [:]
+    /// 앱 창 계단식 배치 카운터(기기별) — 맥에서 앱 여는 느낌의 초기 위치.
+    private var windowCascade: [String: Int] = [:]
     var settings: MirrorSettings = MirrorSettings.load() {
         didSet { settings.save() }
     }
@@ -285,141 +285,26 @@ final class AppState {
         )
         // 오디오 중복 방지: 이 기기에 이미 오디오 켜진 세션이 있으면 이번 창은 무음
         let audioAllowed = !sessions.contains { $0.deviceSerial == device.serial }
+        /* 데스크톱 경험: 새 앱 창은 계단식으로 배치(맥에서 앱 여는 느낌).
+           scrcpy --window-x/y로 초기 위치를 준다. */
+        windowCascade[device.serial, default: 0] += 1
+        let step = ((windowCascade[device.serial] ?? 1) - 1) % 5
+        let origin = (x: 90 + step * 48, y: 110 + step * 40)
         let args = Scrcpy.appArguments(device: device, app: app, settings: settings,
-                                       audioAllowed: audioAllowed, forceNewInstance: forceNewInstance)
+                                       audioAllowed: audioAllowed, forceNewInstance: forceNewInstance,
+                                       windowOrigin: origin)
         beginStayAwakeIfNeeded(serial: device.serial)
         do {
             let process = try Scrcpy.launch(arguments: args, sessionID: session.key)
             session.attach(process)
             sessions.append(session)
+            // 데스크톱 독의 "최근 앱" 기록(최근 것이 마지막)
+            var opened = dexOpenedApps[device.serial] ?? []
+            opened.removeAll { $0.package == app.package }
+            opened.append(app)
+            dexOpenedApps[device.serial] = Array(opened.suffix(8))
         } catch {
             lastError = "앱 창 실행 실패: \(error.localizedDescription)"
-        }
-    }
-
-    /// DeX 데스크톱 전체(가상 디스플레이 = 모니터 + 맥 쪽 DeX 독 = 데스크톱 셸).
-    /* 정책 변경: 삼성 SecondaryLauncher 의존을 없앴다 — 우리만의 DeX는 기기 무관으로
-       동작한다. DeX 창은 가상 디스플레이(모니터)이고, 앱 실행/전환·내비게이션은
-       MacDroid DeX 독 패널이 담당한다. 삼성에서는 SecondaryLauncher를 보너스로
-       추가로 띄운다(작업표시줄·배경 포함 실측).
-       실행 실패 처리는 기존 유지: 즉시 피드백, 조기 사망 감지, 복구 후 1회 재시도. */
-    func launchDexDesktop(for device: Device) {
-        launchDexDesktopAttempt(for: device, allowRecovery: true)
-    }
-
-    private func launchDexDesktopAttempt(for device: Device, allowRecovery: Bool) {
-        let existing = sessions.first { $0.deviceSerial == device.serial && $0.mode == .dex }
-        existing?.terminate()
-        sessions.removeAll { $0.id == Scrcpy.makeID(serial: device.serial, mode: .dex, package: nil) }
-        dexOpenedApps[device.serial] = nil
-
-        busyMessage = "DeX 데스크톱 시작 중…"  // 클릭 즉시 피드백
-        var session = ScrcpySession(
-            id: Scrcpy.makeID(serial: device.serial, mode: .dex, package: nil),
-            deviceSerial: device.serial,
-            mode: .dex,
-            title: "MacDroid · \(device.displayModel) DeX 데스크톱"
-        )
-        let audioAllowed = !sessions.contains { $0.deviceSerial == device.serial }
-        let args = Scrcpy.dexArguments(device: device, settings: settings, audioAllowed: audioAllowed)
-        beginStayAwakeIfNeeded(serial: device.serial)
-
-        Task { @MainActor in
-            // 새 디스플레이 감지 기준선 — scrcpy 실행 '전'에 반드시 확보한다
-            let before = Set((try? await ADB.displayIds(serial: device.serial)) ?? [])
-            do {
-                let process = try Scrcpy.launch(arguments: args, sessionID: session.key)
-                session.attach(process)
-                sessions.removeAll { $0.id == session.id }
-                sessions.append(session)
-
-                // 디스플레이 생성 대기 — 프로세스가 죽으면 즉시 중단(타임아웃까지 기다리지 않음)
-                var displayId: Int?
-                let deadline = Date().addingTimeInterval(12)
-                while Date() < deadline {
-                    if !process.isRunning { break }  // 조기 사망
-                    if let ids = try? await ADB.displayIds(serial: device.serial),
-                       let fresh = ids.first(where: { !before.contains($0) && $0 != 0 }) {
-                        displayId = fresh
-                        break
-                    }
-                    try? await Task.sleep(for: .milliseconds(400))
-                }
-
-                if let displayId {
-                    dexDisplays[device.serial] = displayId
-                    // 삼성 보너스: DeX 런처(실패는 무시 — 없는 기기도 정상 동작)
-                    try? await ADB.startDexLauncher(serial: device.serial, displayId: displayId)
-                    busyMessage = nil
-                    NotificationCenter.default.post(name: .macdroidOpenDexDock, object: device.serial)
-                    return
-                }
-
-                // 실패 — 세션 정리하고 원인 안내
-                session.terminate()
-                sessions.removeAll { $0.key == session.key }
-                busyMessage = nil
-                let reason = process.stderrTail.split(separator: "\n").last.map(String.init) ?? ""
-                if allowRecovery {
-                    busyMessage = "연결이 불안정해 복구 후 다시 시도합니다…"
-                    _ = await performRecovery()
-                    busyMessage = nil
-                    launchDexDesktopAttempt(for: device, allowRecovery: false)
-                } else {
-                    lastError = "DeX 데스크톱 실행 실패\(reason.isEmpty ? "" : " — \(reason)")\n폰 쪽에서 무선 디버깅이 켜져 있는지 확인하고 다시 시도하세요."
-                }
-            } catch {
-                busyMessage = nil
-                lastError = "DeX 데스크톱 실행 실패: \(error.localizedDescription)"
-            }
-        }
-    }
-
-    // MARK: DeX 독 액션 (우리만의 DeX — 데스크톱 셸)
-
-    /// DeX 모니터(가상 디스플레이)에 앱 실행/전환.
-    func dexLaunchApp(on device: Device, app: AndroidApp) {
-        guard let displayId = dexDisplays[device.serial] else {
-            lastError = "DeX 디스플레이를 찾을 수 없습니다 — DeX 데스크톱을 다시 실행하세요."
-            return
-        }
-        busyMessage = "\(app.displayLabel) 여는 중…"
-        Task {
-            do {
-                try await ADB.startAppOnDisplay(serial: device.serial, package: app.package, displayId: displayId)
-                var opened = dexOpenedApps[device.serial] ?? []
-                opened.removeAll { $0.package == app.package }
-                opened.append(app)
-                dexOpenedApps[device.serial] = Array(opened.suffix(8))  // 최근 8개 유지
-            } catch {
-                lastError = "DeX 앱 실행 실패: \(error.localizedDescription)"
-            }
-            busyMessage = nil
-        }
-    }
-
-    /// DeX 모니터에 뒤로 키.
-    func dexBack(on device: Device) {
-        guard let displayId = dexDisplays[device.serial] else { return }
-        Task { try? await ADB.keyOnDisplay(serial: device.serial, displayId: displayId, keycode: 4) }
-    }
-
-    /// DeX 데스크톱(모니터 창 + 상태) 종료.
-    func stopDexDesktop(for device: Device) {
-        for session in sessions where session.deviceSerial == device.serial && session.mode == .dex {
-            session.terminate()
-        }
-        sessions.removeAll { $0.deviceSerial == device.serial && $0.mode == .dex }
-        dexDisplays[device.serial] = nil
-        dexOpenedApps[device.serial] = nil
-        endStayAwakeIfLast(serial: device.serial)
-    }
-
-    /// DeX 세션이 모두 끝났으면 디스플레이 id/열린 앱 상태도 정리.
-    private func cleanDexStateIfEnded(serial: String) {
-        if !sessions.contains(where: { $0.deviceSerial == serial && $0.mode == .dex }) {
-            dexDisplays[serial] = nil
-            dexOpenedApps[serial] = nil
         }
     }
 
@@ -441,7 +326,6 @@ final class AppState {
            onExit는 사용자가 창을 직접 닫은 경우의 정리 경로로만 쓴다. */
         sessions.removeAll { $0.key == session.key }
         endStayAwakeIfLast(serial: session.deviceSerial)
-        cleanDexStateIfEnded(serial: session.deviceSerial)
     }
 
     func stopSessions(for serial: String) {
@@ -450,7 +334,6 @@ final class AppState {
         }
         sessions.removeAll { $0.deviceSerial == serial }
         endStayAwakeIfLast(serial: serial)
-        cleanDexStateIfEnded(serial: serial)
     }
 
     /* 변경 전 정책: 세션 목록은 앱 프로세스 메모리에만 있어서, 앱이 강제 종료되거나
