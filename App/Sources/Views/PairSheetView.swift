@@ -17,7 +17,8 @@ struct PairSheetView: View {
     @State private var pairHost = ""
     @State private var pairCode = ""
     @State private var connectHost = ""
-    @State private var discovery = LanDiscovery()
+    /// 앱 전역 탐색(AppState가 상시 실행·자동 연결) — 시트는 결과만 보여 준다.
+    private var discovery: LanDiscovery { appState.discovery }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,6 +41,9 @@ struct PairSheetView: View {
             footer
         }
         .frame(width: 480, height: 460)
+        // 폰에서 '페어링 코드로 기기 페어링'을 열면 주소를 자동으로 채운다 — 코드만 입력하면 된다
+        .onAppear(perform: fillDiscoveredPairingHost)
+        .onChange(of: discovery.services) { _, _ in fillDiscoveredPairingHost() }
         /* 진행 상태를 시트 안에서 보이게: 기존엔 메인 창 배너에만 뜨는데 시트가
            그 위를 덮어 페어링/연결 진행이 안 보였다. 같은 StatusBanner를 시트 하단에도 둔다. */
         .safeAreaInset(edge: .bottom) {
@@ -165,7 +169,7 @@ struct PairSheetView: View {
                 }
                 Spacer()
                 Button {
-                    discovery.restart()
+                    appState.restartDiscovery()
                 } label: {
                     Image(systemName: "arrow.clockwise")
                 }
@@ -191,7 +195,7 @@ struct PairSheetView: View {
                         .buttonStyle(.borderedProminent)
                         .padding(.top, 4)
                         Button {
-                            discovery.restart()
+                            appState.restartDiscovery()
                         } label: {
                             Text("권한을 허용한 뒤 다시 검색")
                         }
@@ -253,12 +257,10 @@ struct PairSheetView: View {
             }
         }
         .padding(24)
-        .onAppear { discovery.start() }
-        .onDisappear { discovery.stop() }
     }
 
     private func serviceTitle(_ service: LanDiscovery.Service) -> String {
-        let name = matchingDevice(service)?.displayModel ?? service.deviceSerial ?? service.instance
+        let name = matchingDevice(service)?.displayModel ?? service.displayName
         return service.kind == .pairing ? "\(name) · 페어링 대기" : "\(name) · 무선 디버깅"
     }
 
@@ -285,6 +287,14 @@ struct PairSheetView: View {
     /// 현재 CGNAT(VPN) 대역으로 붙어 있는 무선 기기가 있는지 — 자동발견 불가 안내용.
     private var vpnConnectedDeviceExists: Bool {
         appState.devices.contains { $0.isVPNConnected }
+    }
+
+    /// 발견된 페어링 서비스 주소로 빈 입력칸을 채운다(사용자가 직접 입력한 값은 덮지 않음).
+    private func fillDiscoveredPairingHost() {
+        guard pairHost.isEmpty,
+              let service = discovery.services.first(where: { $0.kind == .pairing }) else { return }
+        pairHost = service.address
+        tab = .code
     }
 
     private func pair() {

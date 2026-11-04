@@ -15,10 +15,6 @@ final class AppState {
     private(set) var devices: [Device] = []
     private(set) var sessions: [ScrcpySession] = []
 
-    /// 데스크톱 독의 "최근 앱"(기기별, 최근 것이 마지막, 최대 8개).
-    private(set) var dexOpenedApps: [String: [AndroidApp]] = [:]
-    /// 앱 창 계단식 배치 카운터(기기별) — 맥에서 앱 여는 느낌의 초기 위치.
-    private var windowCascade: [String: Int] = [:]
     var settings: MirrorSettings = MirrorSettings.load() {
         didSet { settings.save() }
     }
@@ -35,6 +31,11 @@ final class AppState {
     private var wirelessSweepTask: Task<Void, Never>?
     private var isShuttingDown = false
     private var detailTasks: [String: Task<Void, Never>] = [:]
+
+    /// 같은 Wi-Fi의 무선 디버깅 기기 탐색 — 앱 전역(페어링 시트를 열지 않아도 항상 돈다).
+    let discovery = LanDiscovery()
+    /// 주소별 마지막 자동 연결 시도 시각 — 같은 주소는 20초에 한 번만 두드린다(포트가 바뀌면 새 주소).
+    private var autoConnectTried: [String: Date] = [:]
 
     /// 기기별 절전 방지(stay_on) 이전값 — DeX/미러 세션 동안 기기가 잠들지 않게 했다가 복구.
     private var stayOnSaved: [String: Int] = [:]
@@ -79,6 +80,10 @@ final class AppState {
         Task { _ = await LocalNetworkPermission.probe(timeout: 3) }
         cleanupOrphanTrackers()
         startDeviceMonitoring()
+        discovery.onServiceResolved = { [weak self] service in
+            self?.autoConnect(service)
+        }
+        discovery.start()
         startWirelessSweep()
         adoptOrphanSessions()
     }
@@ -157,6 +162,10 @@ final class AppState {
                 pruneDeadExternalSessions()  // 사용자가 창을 직접 닫은 고아 세션 정리
                 // 사용자 작업(연결·페어링·복구) 중에는 같은 주소를 동시에 두드리지 않는다
                 guard busyMessage == nil else { continue }
+                // 같은 Wi-Fi에서 보이는데 안 붙어 있는 폰은 다시 자동 연결(폰이 잠깐 끊겼다 돌아온 경우)
+                for service in discovery.services where service.kind == .connect {
+                    autoConnect(service)
+                }
                 let restored = await reconnectRememberedHosts()
                 if !restored.isEmpty {
                     toast = "무선 기기 다시 연결됨: \(restored.joined(separator: ", "))"
@@ -187,6 +196,10 @@ final class AppState {
         var stale: [String] = []
         for host in hosts where !onlineSerials.contains(host) {
             if let ip = host.split(separator: ":").first.map(String.init), onlineIPs.contains(ip) { continue }
+            // 서버 mDNS 전송으로 이미 붙어 있는 폰(이름에 ip가 없다)은 다시 붙이지 않는다 — 중복 전송 방지
+            if discovery.services.contains(where: { service in
+                service.address == host && online.contains { $0.serial.hasPrefix(service.instance) }
+            }) { continue }
             switch await ADB.connectVerified(host: host) {
             case .online: restored.append(host)
             case .refused: stale.append(host)
@@ -211,6 +224,8 @@ final class AppState {
         }
         monitorProcess?.terminate()
         sessions.removeAll()
+        for desktop in desktops.values { desktop.stop() }
+        desktops.removeAll()
     }
 
     // MARK: 기기 스냅샷 적용
@@ -243,6 +258,19 @@ final class AppState {
         // 사라진 기기의 세션은 scrcpy가 스스로 종료함(onExit → removeSession). 여기선 상태만 정리.
         devices = merged
         rememberWirelessHosts(from: merged)
+        dropDuplicateWirelessTransports(merged)
+    }
+
+    /// 같은 폰이 서버 mDNS 전송(adb-<serial>-xxx._adb-tls-connect._tcp)과 ip:port 전송으로 동시에 붙어 있으면 ip:port를 내린다.
+    /* 정책: 같은 adbd에 전송 2개는 끊김·명령 대상 혼동을 부른다(실측: 기억된 주소 재접속과 서버 mDNS 자동연결이 겹침).
+       서버 mDNS 전송이 서버가 스스로 관리하는 쪽이라 그것을 남긴다. 매핑은 앱의 Bonjour 탐색(인스턴스 ↔ ip:port)으로 한다. */
+    private func dropDuplicateWirelessTransports(_ snapshot: [Device]) {
+        let online = snapshot.filter { $0.state == .online }
+        for service in discovery.services where service.kind == .connect {
+            guard online.contains(where: { $0.serial == service.address }),
+                  online.contains(where: { $0.serial.hasPrefix(service.instance) }) else { continue }
+            Task { await ADB.disconnect(serial: service.address) }
+        }
     }
 
     /// 무선(ip:port 형태 시리얼) 기기를 기억해 뒀다가 연결이 풀리면 자동 재접속에 쓴다.
@@ -305,56 +333,36 @@ final class AppState {
         }
     }
 
-    /// DeX 앱 창(가상 디스플레이).
-    /* 변경 전 정책: 같은 앱 창이 이미 있으면 무조건 무시했다(사용자에게 피드백 없음).
-       변경 후 정책: forceNewInstance면 '+' 프리픽스로 새 인스턴스를 추가 실행하고,
-         기본값은 여전히 무시 — 중복 확인 다이얼로그는 LauncherView가 담당한다.
-       이유: Android의 앱 task 재사용 특성상 의도치 않은 이중 실행을 막되,
-         사용자가 명시적으로 원할 때는 별도 창을 띄워주기 위함.
-       영향 범위: DeX 런처의 동일 앱 재실행 경로만. */
-    func launchAppWindow(for device: Device, app: AndroidApp, forceNewInstance: Bool = false) {
-        let id = Scrcpy.makeID(serial: device.serial, mode: .app, package: app.package)
-        if !forceNewInstance, sessions.contains(where: { $0.id == id }) { return }
+    // MARK: 데스크톱
 
-        var session = ScrcpySession(
-            id: id,
-            deviceSerial: device.serial,
-            mode: .app,
-            title: "MacDroid · \(app.displayLabel)"
-        )
-        // 오디오 중복 방지: 이 기기에 이미 오디오 켜진 세션이 있으면 이번 창은 무음
-        let audioAllowed = !sessions.contains { $0.deviceSerial == device.serial }
-        /* 데스크톱 경험: 새 앱 창은 계단식으로 배치(맥에서 앱 여는 느낌).
-           scrcpy --window-x/y로 초기 위치를 준다. */
-        windowCascade[device.serial, default: 0] += 1
-        let step = ((windowCascade[device.serial] ?? 1) - 1) % 5
-        let origin = (x: 90 + step * 48, y: 110 + step * 40)
-        let args = Scrcpy.appArguments(device: device, app: app, settings: settings,
-                                       audioAllowed: audioAllowed, forceNewInstance: forceNewInstance,
-                                       windowOrigin: origin)
-        beginStayAwakeIfNeeded(serial: device.serial)
-        do {
-            let process = try Scrcpy.launch(arguments: args, sessionID: session.key)
-            session.attach(process)
-            sessions.append(session)
-            // 데스크톱 독의 "최근 앱" 기록(최근 것이 마지막)
-            var opened = dexOpenedApps[device.serial] ?? []
-            opened.removeAll { $0.package == app.package }
-            opened.append(app)
-            dexOpenedApps[device.serial] = Array(opened.suffix(8))
-        } catch {
-            lastError = "앱 창 실행 실패: \(error.localizedDescription)"
-        }
+    /// 기기별 MacDroid 데스크톱 세션(데스크톱 창이 열려 있는 동안).
+    private(set) var desktops: [String: DesktopSession] = [:]
+
+    /// 기기의 데스크톱 세션(없으면 만든다 — 실제 스트림은 데스크톱 창이 크기를 알려 줄 때 시작).
+    func desktop(for serial: String) -> DesktopSession {
+        if let existing = desktops[serial] { return existing }
+        let session = DesktopSession(serial: serial, appState: self)
+        desktops[serial] = session
+        return session
     }
 
-    /// 기존 창을 종료하고 새로 실행(확인 다이얼로그에서 '기존 창 닫고 새로 실행'을 고른 경로).
+    /// 데스크톱 창이 닫히면 스트림·창 추적을 정리한다.
+    func endDesktop(serial: String) {
+        desktops.removeValue(forKey: serial)?.stop()
+    }
+
+    /// 앱을 MacDroid 데스크톱 안의 창으로 연다(데스크톱 창은 호출한 뷰가 openWindow로 띄운다).
+    /* 변경 전 정책: 앱마다 scrcpy(가상 디스플레이+인코더)를 따로 띄우거나, 삼성 데스크톱 화면을 그대로 미러했다.
+       변경 후 정책: 데스크톱 세션의 가상 디스플레이 1개에 freeform 창으로 열고(am start, 0.1초), MacDroid가
+         그 창 영역만 잘라 우리 데스크톱(배경화면·상태표시줄·독·내비바) 안의 창으로 그린다.
+       영향 범위: 앱 런처·기기 상세의 앱 실행. 데스크톱이 아직 준비 중이면 준비되는 즉시 연다. */
+    func launchAppWindow(for device: Device, app: AndroidApp, forceNewInstance: Bool = false) {
+        desktop(for: device.serial).launch(app, newInstance: forceNewInstance)
+    }
+
+    /// 기존 창을 끄고 새로 실행.
     func relaunchAppWindow(for device: Device, app: AndroidApp) {
-        let id = Scrcpy.makeID(serial: device.serial, mode: .app, package: app.package)
-        for session in sessions where session.id == id {
-            session.terminate()
-            sessions.removeAll { $0.key == session.key }  // onExit 대기 없이 즉시 제거(재실행 id 충돌 방지)
-        }
-        launchAppWindow(for: device, app: app)
+        desktop(for: device.serial).launch(app, restart: true)
     }
 
     func stopSession(_ session: ScrcpySession) {
@@ -456,7 +464,9 @@ final class AppState {
         guard !dead.isEmpty else { return }
         let deadKeys = Set(dead.map(\.key))
         sessions.removeAll { deadKeys.contains($0.key) }
-        for session in dead { endStayAwakeIfLast(serial: session.deviceSerial) }
+        for session in dead {
+            endStayAwakeIfLast(serial: session.deviceSerial)
+            }
     }
 
     private func removeSession(id: String) {
@@ -509,7 +519,12 @@ final class AppState {
             busyMessage = nil
             switch result {
             case .success:
-                toast = "페어링 완료 — 이제 '자동 발견' 또는 'IP 직접 연결'로 연결하세요"
+                toast = "페어링 완료 — 자동으로 연결합니다"
+                // 페어링 전엔 notAuthenticated였던 같은 폰의 connect 서비스를 즉시 다시 붙인다
+                autoConnectTried.removeAll()
+                for service in discovery.services where service.kind == .connect {
+                    autoConnect(service)
+                }
             case .failure(let error):
                 lastError = Self.pairFailureMessage(host: host, error: error)
             }
@@ -523,26 +538,109 @@ final class AppState {
         lastError = nil
         busyMessage = "연결 중… \(host)"
         Task {
-            var outcome = await ADB.connectVerified(host: host)
-            var serverRestarted = false
-            if Self.isLanNetworkFailure(outcome, host: host) {
-                switch await Self.appReach(host) {
-                case .reachable:
-                    busyMessage = Self.restartingServerMessage
-                    await ADB.restartServer()
-                    serverRestarted = true
-                    outcome = await ADB.connectVerified(host: host)
-                case .localNetworkDenied:
-                    busyMessage = nil
-                    lastError = Self.localNetworkDeniedMessage
-                    return
-                case .unreachable, nil:
-                    break
-                }
-            }
+            let result = await connectWithRecovery(host: host)
             busyMessage = nil
-            report(outcome, host: host, serverRestarted: serverRestarted)
+            switch result {
+            case .localNetworkDenied:
+                lastError = Self.localNetworkDeniedMessage
+            case .outcome(let outcome, let serverRestarted):
+                report(outcome, host: host, serverRestarted: serverRestarted)
+            }
         }
+    }
+
+    private enum ConnectResult {
+        case outcome(ADB.ConnectOutcome, serverRestarted: Bool)
+        case localNetworkDenied
+    }
+
+    /// connectVerified + 서버 권한 복구(앱은 닿는데 서버만 못 닿으면 서버를 MacDroid 소속으로 재시작 후 1회 재시도).
+    private func connectWithRecovery(host: String) async -> ConnectResult {
+        var outcome = await ADB.connectVerified(host: host)
+        var serverRestarted = false
+        if Self.isLanNetworkFailure(outcome, host: host) {
+            switch await Self.appReach(host) {
+            case .reachable:
+                busyMessage = Self.restartingServerMessage
+                await ADB.restartServer()
+                serverRestarted = true
+                outcome = await ADB.connectVerified(host: host)
+            case .localNetworkDenied:
+                return .localNetworkDenied
+            case .unreachable, nil:
+                break
+            }
+        }
+        return .outcome(outcome, serverRestarted: serverRestarted)
+    }
+
+    /// 발견된 무선 디버깅 기기 자동 연결.
+    /* 변경 전 정책: 같은 Wi-Fi의 기기는 페어링 시트 '자동 발견' 탭을 열고 '연결'을 눌러야만 붙었다.
+         앱을 켜도 아무것도 안 뜨고, 무엇을 해야 하는지 응답이 없었다(실사용 피드백).
+       변경 후 정책: 앱 시작부터 Bonjour 탐색을 상시로 돌리고, 새로 해석된 _adb-tls-connect 서비스는
+         (같은 폰이 이미 online이 아니면) 자동 connect한다 — 주소당 20초에 한 번, 20초 스윕에서도 다시 시도
+         (실측: 앱 재시작 직후 잠깐 붙었다 끊긴 폰을 '이미 시도함'으로 남겨 영영 재접속하지 않았다). 서버가 로컬 네트워크 권한에
+         막혔으면 connectWithRecovery가 서버를 MacDroid 소속으로 재시작한다.
+         페어링이 안 된 폰(notAuthenticated)이면 페어링 방법을 바로 안내한다.
+       변경 이유: "한 번 페어링하면 켜자마자 붙는" 흐름 — 사용자가 경로를 찾게 하지 않는다.
+       영향 범위: 같은 LAN에서 무선 디버깅이 켜진 모든 폰. 사용자 작업(busyMessage) 중엔 끝날 때까지 대기.
+         '다시 찾기'/'연결 복구'/페어링 성공 시에는 간격 없이 즉시 재시도한다. */
+    private func autoConnect(_ service: LanDiscovery.Service) {
+        guard service.kind == .connect, !isShuttingDown, !isOnline(service) else { return }
+        if let last = autoConnectTried[service.address], Date().timeIntervalSince(last) < 20 { return }
+        autoConnectTried[service.address] = Date()
+        Task {
+            while busyMessage != nil {
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+            // adb 서버도 LAN 권한이 있으면 mDNS로 스스로 붙는다(이름: adb-<serial>-xxx._adb-tls-connect._tcp).
+            // 동시에 우리도 ip:port로 붙으면 같은 adbd에 전송이 2개 생긴다(실측) — 잠깐 기다리고 실제 목록으로 확인.
+            try? await Task.sleep(for: .seconds(2))
+            if let list = try? await ADB.listDevices() {
+                applyDeviceSnapshot(list)
+            }
+            guard !isShuttingDown, !isOnline(service) else { return }
+            let name = service.displayName
+            busyMessage = "\(name) 발견 — 무선으로 자동 연결 중…"
+            let result = await connectWithRecovery(host: service.address)
+            busyMessage = nil
+            switch result {
+            case .localNetworkDenied:
+                autoConnectTried[service.address] = nil
+                lastError = Self.localNetworkDeniedMessage
+            case .outcome(.online, _):
+                toast = "\(name) 무선 연결됨"
+                // 그 사이 서버 mDNS 자동연결도 붙었으면 우리 ip:port 전송을 내려 중복을 없앤다
+                if let list = try? await ADB.listDevices(),
+                   list.contains(where: { $0.state == .online && $0.serial.hasPrefix(service.instance) }) {
+                    await ADB.disconnect(serial: service.address)
+                }
+            case .outcome(.notAuthenticated, _):
+                // 페어링 전에는 다시 두드려도 소용없다 — 페어링 성공/다시 찾기까지 재시도 중단(안내 반복 방지)
+                autoConnectTried[service.address] = .distantFuture
+                lastError = "\(name)이(가) 같은 Wi-Fi에 있지만 이 맥과 아직 페어링되지 않았습니다 — '무선 기기 연결'을 누르고, 폰의 무선 디버깅 → '페어링 코드로 기기 페어링'을 열면 주소가 자동으로 채워집니다. 코드만 입력하세요(최초 1회)."
+            case .outcome(let outcome, let serverRestarted):
+                report(outcome, host: service.address, serverRestarted: serverRestarted)
+            }
+        }
+    }
+
+    /// 이 서비스의 폰이 이미 어떤 전송(USB·LAN·VPN)으로든 online인지.
+    private func isOnline(_ service: LanDiscovery.Service) -> Bool {
+        devices.contains { device in
+            device.state == .online && (
+                device.serial == service.address
+                || device.serial.hasPrefix(service.instance)
+                || device.serial == service.deviceSerial
+                || (service.deviceSerial != nil && device.serialNo == service.deviceSerial)
+            )
+        }
+    }
+
+    /// 탐색을 처음부터 다시 + 자동 연결 기록 초기화(권한 허용·페어링 후 재시도).
+    func restartDiscovery() {
+        autoConnectTried.removeAll()
+        discovery.restart()
     }
 
     private func report(_ outcome: ADB.ConnectOutcome, host: String, serverRestarted: Bool) {
@@ -667,6 +765,7 @@ final class AppState {
     func recoverConnections() {
         guard busyMessage == nil else { return }
         busyMessage = "연결 복구 중… (몇 초 걸림)"
+        restartDiscovery()
         Task {
             let connected = await performRecovery()
             busyMessage = nil

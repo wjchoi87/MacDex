@@ -25,16 +25,22 @@ struct MainView: View {
             }
             .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 320)
         } detail: {
-            if let device = selectedDevice {
-                DeviceDetailView(device: device)
-            } else {
-                EmptyStateView {
-                    activeSheet = .onboarding
-                } onRecover: {
-                    appState.recoverConnections()
-                } onPair: {
-                    activeSheet = .pair
+            Group {
+                if let device = selectedDevice {
+                    DeviceDetailView(device: device)
+                } else {
+                    EmptyStateView {
+                        activeSheet = .onboarding
+                    } onRecover: {
+                        appState.recoverConnections()
+                    } onPair: {
+                        activeSheet = .pair
+                    }
                 }
+            }
+            // 연결 관련 알림은 오른쪽(상세) 패널의 가운데 아래에(변경 전: 창 전체 가운데 아래 — 사이드바에 걸쳐 보였다)
+            .overlay(alignment: .bottom) {
+                StatusBanner()
             }
         }
         .navigationTitle("MacDroid")
@@ -49,18 +55,19 @@ struct MainView: View {
         .onReceive(NotificationCenter.default.publisher(for: .macdroidOpenPair)) { _ in
             activeSheet = .pair
         }
-        .overlay(alignment: .bottom) {
-            StatusBanner()
-        }
         .task {
             appState.start()
             // 첫 실행이면 온보딩 표시
             if showOnboarding { activeSheet = .onboarding }
         }
         // 기기가 잡히면: 아직 선택 없으면 첫 기기 자동 선택 + 온보딩 자동 완료
-        .onChange(of: appState.devices) { devices, _ in
-            if selectedSerial == nil, let first = devices.first(where: { $0.state == .online }) {
-                selectedSerial = first.serial
+        /* 변경 전: online 기기만 자동 선택 → USB '승인 필요' 기기는 빈 화면에 가려 "폰에서 허용"
+           안내가 안 보였다. 변경 후: online 우선, 없으면 승인 대기 기기도 선택해 안내 카드를 띄운다. */
+        .onChange(of: appState.devices) { _, devices in
+            guard selectedSerial == nil || selectedDevice == nil else { return }
+            if let pick = devices.first(where: { $0.state == .online })
+                ?? devices.first(where: { $0.state == .unauthorized }) {
+                selectedSerial = pick.serial
             }
         }
         .onChange(of: appState.devices.contains { $0.state == .online }) { _, connected in
@@ -157,6 +164,29 @@ struct EmptyStateView: View {
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+            }
+
+            // 로컬 네트워크 차단이 확인되면 무선은 절대 안 된다 — 1순위로 바로 해결 버튼을 준다
+            if appState.discovery.permission == .denied {
+                VStack(spacing: 8) {
+                    Label("MacDroid의 로컬 네트워크 접근이 꺼져 있어 같은 Wi-Fi의 폰을 찾을 수 없습니다.",
+                          systemImage: "network.badge.shield.half.filled")
+                        .foregroundStyle(.orange)
+                    HStack {
+                        Button("시스템 설정에서 허용하기") {
+                            LocalNetworkPermission.openSystemSettings()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        Button("허용했어요, 다시 찾기") {
+                            appState.restartDiscovery()
+                        }
+                    }
+                }
+                .padding(12)
+                .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+            } else if let found = appState.discovery.services.first(where: { $0.kind == .connect }) {
+                Label("같은 Wi-Fi에서 \(found.displayName) 발견", systemImage: "wifi")
+                    .foregroundStyle(.secondary)
             }
 
             HStack(spacing: 12) {

@@ -76,6 +76,8 @@ struct AndroidApp: Identifiable, Hashable, Sendable {
 
     var label: String?
     var iconURL: URL?
+    /// 런처 액티비티(앱 인덱서가 알려 줌) — 있으면 am start로 바로 연다.
+    var activity: String?
 
     var id: String { package }
 

@@ -31,6 +31,16 @@ struct MacDroidApp: App {
             MacDroidCommands()
         }
 
+        // MacDroid 데스크톱(우리 DeX 셸) — 기기별 1개
+        WindowGroup(id: "desktop", for: String.self) { $serial in
+            if let serial {
+                DesktopView(serial: serial)
+                    .environment(appState)
+            }
+        }
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 1440, height: 900)
+
         // DeX 앱 런처 — 기기 시리얼을 값으로 갖는 윈도우(기기별 다중 창)
         WindowGroup(id: "launcher", for: String.self) { $serial in
             if let serial {
@@ -42,18 +52,6 @@ struct MacDroidApp: App {
             }
         }
         .defaultSize(width: 1000, height: 660)
-
-        // MacDroid 데스크톱 — 맥 스타일 데스크톱 환경(메뉴바·독·런치패드, 앱은 각자 창)
-        WindowGroup(id: "macdroid.desktop", for: String.self) { $serial in
-            if let serial {
-                DesktopView(serial: serial)
-                    .environment(appState)
-            } else {
-                ContentUnavailableView("기기 없음", systemImage: "iphone.slash",
-                                       description: Text("연결된 기기를 선택하세요."))
-            }
-        }
-        .defaultSize(width: 1280, height: 800)
 
         Settings {
             SettingsView()

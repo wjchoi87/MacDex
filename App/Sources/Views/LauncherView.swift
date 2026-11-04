@@ -1,10 +1,15 @@
 import SwiftUI
 import AppKit
 
-/// DeX 앱 런처 — 기기의 앱을 그리드로 보여주고, 더블클릭으로 가상 디스플레이 창에서 실행.
-/// 정책: 앱 라벨/아이콘은 보이는 타일만 지연 로딩(aapt2 + 캐시). 대형 APK는 모노그램 타일 유지.
+/// DeX 앱 런처 — 폰 앱 서랍과 같은 목록(실제 이름·아이콘)을 보여주고, 더블클릭하면 데스크톱 안의 창으로 연다.
+/* 변경 전 정책: 서드파티 앱만, 라벨/아이콘은 타일마다 APK를 받아 aapt2로(느리고 대부분 모노그램). 같은 앱 재실행은
+     확인 다이얼로그. 변경 후 정책: 기기 인덱서(AppCatalog.loadIndex)로 런처 목록 전체를 실제 라벨·아이콘과 함께 받는다
+     (실패 시 기존 방식 폴백). 이미 열린 앱을 다시 열면 그 창이 앞으로 온다(데스크톱 동작) — 새 창/다시 시작은 우클릭 메뉴.
+     Esc·⌘W로 닫힌다. 영향 범위: 앱 런처 창. */
 struct LauncherView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.openWindow) private var openWindow
 
     let serial: String
 
@@ -13,9 +18,7 @@ struct LauncherView: View {
     @State private var loading = true
     @State private var loadError: String?
     @State private var searchText = ""
-    @State private var showSystemApps = false
     @State private var loadTask: Task<Void, Never>?
-    @State private var duplicateApp: AndroidApp?
 
     private var device: Device? {
         appState.device(for: serial)
@@ -50,13 +53,12 @@ struct LauncherView: View {
         .navigationTitle("앱 런처 · \(device?.displayModel ?? serial)")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Toggle(isOn: $showSystemApps) {
-                    Label("시스템 앱 포함", systemImage: "gearshape.2")
+                Button {
+                    openWindow(id: "desktop", value: serial)
+                } label: {
+                    Label("데스크톱 열기", systemImage: "dock.rectangle")
                 }
-                .toggleStyle(.checkbox)
-                // 툴바 첫 아이템이라 왼쪽에 붙음 — 좌우 여백 확보
-                .padding(.horizontal, 8)
-                .help("시스템 앱도 표시")
+                .help("MacDroid 데스크톱 창 열기 — 앱은 그 안에서 창으로 열립니다")
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -67,36 +69,12 @@ struct LauncherView: View {
             }
         }
         .searchable(text: $searchText, placement: .toolbar, prompt: "앱 검색")
-        .onChange(of: showSystemApps) {
-            load()
-        }
+        .onExitCommand { dismissWindow() }
         .task {
             load()
         }
         .onDisappear {
             loadTask?.cancel()
-        }
-        .alert(
-            "\(duplicateApp?.displayLabel ?? "") — 이미 실행 중",
-            isPresented: Binding(
-                get: { duplicateApp != nil },
-                set: { if !$0 { duplicateApp = nil } }
-            ),
-            presenting: duplicateApp
-        ) { app in
-            Button("새 창으로 실행") {
-                if let device {
-                    appState.launchAppWindow(for: device, app: app, forceNewInstance: true)
-                }
-            }
-            Button("기존 창 닫고 새로 실행", role: .destructive) {
-                if let device {
-                    appState.relaunchAppWindow(for: device, app: app)
-                }
-            }
-            Button("취소", role: .cancel) {}
-        } message: { _ in
-            Text("같은 앱을 별도의 새 창으로 또 띄울 수 있습니다. 기존 창을 그대로 이어서 쓰려면 취소하고, 기존 창을 닫은 뒤 다시 실행하세요.")
         }
     }
 
@@ -112,12 +90,20 @@ struct LauncherView: View {
                         AppTile(
                             app: app,
                             icon: icons[app.package],
-                            isRunning: appState.sessions.contains {
-                                $0.deviceSerial == serial && $0.id.hasSuffix("|app|\(app.package)")
-                            }
+                            isRunning: appState.desktops[serial]?.isRunning(app.package) ?? false
                         )
                         .onTapGesture(count: 2) {
-                            launchOrAsk(app)
+                            launch(app)
+                        }
+                        .contextMenu {
+                            Button("열기") { launch(app) }
+                            Button("새 창으로 열기") { launch(app, newInstance: true) }
+                            Button("다시 시작") {
+                                if let device {
+                                    appState.relaunchAppWindow(for: device, app: app)
+                                    openWindow(id: "desktop", value: serial)
+                                }
+                            }
                         }
                         .task(id: app.package) {
                             await loadMetadata(for: app)
@@ -129,33 +115,13 @@ struct LauncherView: View {
         }
     }
 
-    private func launch(_ app: AndroidApp) {
+    private func launch(_ app: AndroidApp, newInstance: Bool = false) {
         guard let device, device.state == .online else {
             appState.showError("기기가 온라인이 아닙니다.")
             return
         }
-        appState.launchAppWindow(for: device, app: app)
-    }
-
-    /* 변경 전 정책: 이미 실행 중인 앱을 더블클릭하면 조용히 무시했다.
-       변경 후 정책: 사용자에게 묻는다 — (1) 별도 새 창으로 또 띄우기(새 인스턴스),
-         (2) 기존 창을 닫고 새로 실행, (3) 취소 + "기존 창을 닫은 뒤 다시 실행" 안내.
-       이유: Android는 기본적으로 앱 task를 재사용하므로 의도치 않은 이중 실행과
-         사용자 혼란(아무 반응 없음)을 같이 해소하기 위함.
-       영향 범위: DeX 런처의 동일 앱 재실행 경로만. 새 인스턴스는 scrcpy '+' 프리픽스로 강제. */
-    private func launchOrAsk(_ app: AndroidApp) {
-        guard let device, device.state == .online else {
-            appState.showError("기기가 온라인이 아닙니다.")
-            return
-        }
-        let alreadyRunning = appState.sessions.contains {
-            $0.deviceSerial == device.serial && $0.id.hasSuffix("|app|\(app.package)")
-        }
-        if alreadyRunning {
-            duplicateApp = app
-        } else {
-            appState.launchAppWindow(for: device, app: app)
-        }
+        appState.launchAppWindow(for: device, app: app, forceNewInstance: newInstance)
+        openWindow(id: "desktop", value: serial)
     }
 
     private func load() {
@@ -164,7 +130,12 @@ struct LauncherView: View {
         loadError = nil
         loadTask = Task {
             do {
-                let loaded = try await ADB.installedApps(serial: serial, includeSystem: showSystemApps)
+                let loaded: [AndroidApp]
+                if let indexed = await AppCatalog.loadIndex(serial: serial) {
+                    loaded = indexed
+                } else {
+                    loaded = try await ADB.installedApps(serial: serial)
+                }
                 if Task.isCancelled { return }
                 apps = loaded
                 loading = false
@@ -178,7 +149,13 @@ struct LauncherView: View {
 
     /// 보이는 타일의 메타데이터만 로드해 원본 배열과 아이콘 캐시를 갱신.
     private func loadMetadata(for app: AndroidApp) async {
-        guard app.iconURL == nil, app.label == nil, icons[app.package] == nil else { return }
+        guard icons[app.package] == nil else { return }
+        // 인덱서가 이미 아이콘을 받아 둔 앱 — 파일만 읽는다
+        if let url = app.iconURL {
+            if let image = NSImage(contentsOf: url) { icons[app.package] = image }
+            return
+        }
+        guard app.label == nil else { return }
         let updated = await AppCatalog.loadMetadata(serial: serial, app: app)
         guard !Task.isCancelled,
               let index = apps.firstIndex(where: { $0.package == app.package }) else { return }
@@ -223,7 +200,7 @@ struct AppTile: View {
                 .font(.caption)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
-                .help("\(app.displayLabel)\n\(app.package)\n더블클릭: DeX 창에서 실행")
+                .help("\(app.displayLabel)\n\(app.package)\n더블클릭: 데스크톱에서 열기 · 우클릭: 새 창/다시 시작")
         }
         .padding(8)
         .contentShape(.rect)

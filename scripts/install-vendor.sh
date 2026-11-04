@@ -7,6 +7,7 @@ APP="${1:?usage: install-vendor.sh <app-bundle> <project-dir>}"
 PROJECT="${2:?usage: install-vendor.sh <app-bundle> <project-dir>}"
 
 "$PROJECT/scripts/fetch-vendor.sh"
+"$PROJECT/scripts/build-helper.sh"
 
 DEST="$APP/Contents/Resources"
 mkdir -p "$DEST"

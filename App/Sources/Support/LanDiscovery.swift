@@ -90,6 +90,10 @@ final class LanDiscovery {
         let instance: String      // 예: adb-R3CXC0B854E-HwzEEU
         let kind: Kind
         let address: String       // 해석된 IPv4 ip:port
+        var title: String? = nil  // TXT given_name/name(예: S25+) — 없으면 시리얼
+
+        /// 사용자에게 보여 줄 이름.
+        var displayName: String { title ?? deviceSerial ?? instance }
 
         var id: String { (kind == .pairing ? "P|" : "C|") + instance }
 
@@ -107,9 +111,12 @@ final class LanDiscovery {
     private(set) var permission: LocalNetworkStatus = .unknown
     private(set) var isBrowsing = false
 
+    /// 서비스가 새로 해석(목록에 추가)될 때 — AppState가 자동 연결에 쓴다.
+    var onServiceResolved: ((Service) -> Void)?
+
     private var browsers: [NWBrowser] = []
     /// 아직 해석되지 않은(또는 실패한) 서비스 — id → (이름, 종류, 엔드포인트)
-    private var pending: [String: (instance: String, kind: Service.Kind, endpoint: NWEndpoint)] = [:]
+    private var pending: [String: (instance: String, kind: Service.Kind, endpoint: NWEndpoint, title: String?)] = [:]
     private var resolving: Set<String> = []
     private var retryTask: Task<Void, Never>?
 
@@ -118,7 +125,7 @@ final class LanDiscovery {
         isBrowsing = true
         for (type, kind) in [("_adb-tls-connect._tcp", Service.Kind.connect),
                              ("_adb-tls-pairing._tcp", Service.Kind.pairing)] {
-            let browser = NWBrowser(for: .bonjour(type: type, domain: nil), using: .tcp)
+            let browser = NWBrowser(for: .bonjourWithTXTRecord(type: type, domain: nil), using: .tcp)
             browser.stateUpdateHandler = { [weak self] state in
                 var isDenied = false
                 switch state {
@@ -132,10 +139,14 @@ final class LanDiscovery {
                 }
             }
             browser.browseResultsChangedHandler = { [weak self] results, _ in
-                var found: [(String, NWEndpoint)] = []
+                var found: [(String, NWEndpoint, String?)] = []
                 for result in results {
                     if case .service(let name, _, _, _) = result.endpoint {
-                        found.append((name, result.endpoint))
+                        var title: String?
+                        if case .bonjour(let txt) = result.metadata {
+                            title = txt["given_name"] ?? txt["name"]
+                        }
+                        found.append((name, result.endpoint, title))
                     }
                 }
                 let snapshot = found
@@ -170,10 +181,30 @@ final class LanDiscovery {
         start()
     }
 
+    /* 변경 전 정책: 권한 거부는 Bonjour 엔드포인트 해석 연결의 path(unsatisfiedReason)로만 판정했다.
+       실측 결함: 거부 상태에서 '부모' Bonjour 연결의 path는 satisfied이고, 해석된 IPv4 자식 연결만
+       "Local network prohibited"로 실패한다 → 타임아웃(unreachable)으로 끝나 거부가 영영 감지되지 않았고,
+       사용자는 아무 안내 없이 빈 목록만 봤다.
+       변경 후 정책: 해석이 실패하면 Mac 자신의 LAN 서브넷 주소(게이트웨이 추정)로 직접 TCP 경로를
+       열어 본다. 직접 연결의 path는 거부 시 즉시 localNetworkDenied를 돌려준다(호스트 존재 여부 무관).
+       영향 범위: 자동 발견·메인 화면의 로컬 네트워크 차단 안내 표시. */
+    private var deniedCheckRunning = false
+
+    private func checkDeniedViaDirectPath() {
+        guard !deniedCheckRunning, let target = LocalNetworkPermission.lanProbeTarget() else { return }
+        deniedCheckRunning = true
+        Task { [weak self] in
+            let reach = await LanProbe.tcp(host: target, port: 9, timeout: 1.5)
+            guard let self else { return }
+            self.deniedCheckRunning = false
+            if reach == .localNetworkDenied { self.permission = .denied }
+        }
+    }
+
     /* 권한 판정: Bonjour 결과 수신은 허용 증거가 아니다 — 실측으로 LAN TCP가 거부된 상태에서도
        캐시된 서비스가 browse 결과로 왔다. 해석(TCP 연결) 결과로만 판정한다:
        ready → granted, localNetworkDenied → denied. */
-    private func apply(_ found: [(String, NWEndpoint)], kind: Service.Kind) {
+    private func apply(_ found: [(String, NWEndpoint, String?)], kind: Service.Kind) {
         let prefix = kind == .pairing ? "P|" : "C|"
         let liveIDs = Set(found.map { prefix + $0.0 })
         // 사라진 서비스 정리(폰에서 무선 디버깅을 끄거나 페어링 화면을 닫은 경우)
@@ -181,10 +212,10 @@ final class LanDiscovery {
         for id in pending.keys where id.hasPrefix(prefix) && !liveIDs.contains(id) {
             pending[id] = nil
         }
-        for (instance, endpoint) in found {
+        for (instance, endpoint, title) in found {
             let id = prefix + instance
             guard !services.contains(where: { $0.id == id }) else { continue }
-            pending[id] = (instance, kind, endpoint)
+            pending[id] = (instance, kind, endpoint, title)
         }
         resolvePending()
     }
@@ -194,25 +225,29 @@ final class LanDiscovery {
             resolving.insert(id)
             Task { [weak self] in
                 let resolved = await LanProbe.resolveIPv4(entry.endpoint)
-                self?.finishResolve(id: id, instance: entry.instance, kind: entry.kind,
+                self?.finishResolve(id: id, instance: entry.instance, kind: entry.kind, title: entry.title,
                                     reach: resolved.reach, address: resolved.address)
             }
         }
     }
 
-    private func finishResolve(id: String, instance: String, kind: Service.Kind,
+    private func finishResolve(id: String, instance: String, kind: Service.Kind, title: String?,
                                reach: LanProbe.Reach, address: String?) {
         resolving.remove(id)
         switch reach {
         case .localNetworkDenied: permission = .denied
         case .reachable: permission = .granted
-        case .unreachable: break
+        case .unreachable:
+            // Bonjour 해석 실패는 권한 거부를 드러내지 않는다 — 직접 LAN 경로로 한 번 더 판정
+            if permission != .granted { checkDeniedViaDirectPath() }
         }
         // 해석 실패(오래된 캐시 레코드 등)는 숨긴 채 다음 주기에 다시 시도
         guard let address, pending[id] != nil else { return }
         pending[id] = nil
         services.removeAll { $0.id == id }
-        services.append(Service(instance: instance, kind: kind, address: address))
+        let service = Service(instance: instance, kind: kind, address: address, title: title)
+        services.append(service)
+        onServiceResolved?(service)
         services.sort { ($0.kind == .connect ? 0 : 1, $0.instance) < ($1.kind == .connect ? 0 : 1, $1.instance) }
     }
 }

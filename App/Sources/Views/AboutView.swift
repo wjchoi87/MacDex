@@ -24,11 +24,26 @@ struct AboutView: View {
             }
 
             Section("특징") {
-                LabeledContent("미러링", value: "초저지연 하드웨어 디코딩 (scrcpy 기반)")
-                LabeledContent("DeX 모드", value: "앱마다 독립 가상 디스플레이 창")
-                LabeledContent("입력", value: "물리 키보드·마우스·호버·한글 IME")
-                LabeledContent("무선", value: "Wi-Fi 페어링/연결, mDNS 자동 발견")
-                LabeledContent("프라이버시", value: "모든 통신은 로컬(USB/Wi-Fi) — 서버 없음")
+                // 표 형태: 항목 이름 열(오른쪽 정렬, 고정 폭) + 설명 열, 행마다 구분선
+                Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 16, verticalSpacing: 0) {
+                    ForEach(Array(features.enumerated()), id: \.offset) { index, feature in
+                        if index > 0 {
+                            Divider().gridCellUnsizedAxes(.horizontal)
+                        }
+                        GridRow {
+                            Text(feature.name)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 84, alignment: .trailing)
+                            Text(feature.detail)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.vertical, 7)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
             }
 
             Section("오픈소스 고지") {
@@ -48,6 +63,14 @@ struct AboutView: View {
             }
         }
     }
+
+    private let features: [(name: String, detail: String)] = [
+        ("미러링", "초저지연 하드웨어 디코딩 (scrcpy 기반)"),
+        ("DeX 데스크톱", "MacDroid 데스크톱 — 앱을 창으로, 독·상태표시줄·바탕화면 아이콘"),
+        ("입력", "물리 키보드·마우스·호버·한글 입력"),
+        ("무선", "Wi-Fi 페어링/연결, 같은 네트워크 자동 발견"),
+        ("프라이버시", "모든 통신은 로컬(USB/Wi-Fi) — 서버 없음"),
+    ]
 
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"

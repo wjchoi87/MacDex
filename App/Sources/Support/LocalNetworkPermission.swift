@@ -78,6 +78,28 @@ enum LocalNetworkPermission {
         return text.contains("PolicyDenied") || text.contains("-65570")
     }
 
+    /// 권한 판정용 직접 LAN 대상 — 이 Mac의 사설 IPv4 서브넷 게이트웨이 추정(x.y.z.1, 자신이 .1이면 .2).
+    /// 연결 성공 여부가 아니라 path의 정책 거부 여부만 본다.
+    static func lanProbeTarget() -> String? {
+        var head: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&head) == 0, let first = head else { return nil }
+        defer { freeifaddrs(head) }
+        for cursor in sequence(first: first, next: { $0.pointee.ifa_next }) {
+            let entry = cursor.pointee
+            guard let addr = entry.ifa_addr, addr.pointee.sa_family == UInt8(AF_INET),
+                  String(cString: entry.ifa_name).hasPrefix("en") else { continue }
+            var sin = sockaddr_in()
+            memcpy(&sin, addr, MemoryLayout<sockaddr_in>.size)
+            let octets = withUnsafeBytes(of: sin.sin_addr.s_addr) { Array($0) }
+            let (a, b) = (Int(octets[0]), Int(octets[1]))
+            let isPrivate = a == 10 || (a == 172 && (16...31).contains(b)) || (a == 192 && b == 168)
+            guard isPrivate else { continue }
+            let last = octets[3] == 1 ? 2 : 1
+            return "\(octets[0]).\(octets[1]).\(octets[2]).\(last)"
+        }
+        return nil
+    }
+
     /// 시스템 설정의 로컬 네트워크 패널 열기.
     static func openSystemSettings() {
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork")!

@@ -308,6 +308,284 @@ enum ADB {
         return services
     }
 
+    // MARK: 데스크톱 디스플레이 앱 실행
+
+    /// 데스크톱 가상 디스플레이에 앱을 freeform 창으로 연다(이미 열려 있으면 앞으로 가져온다).
+    /// newInstance: 같은 앱의 새 창(NEW_TASK|MULTIPLE_TASK), restart: 기존 것을 끄고 새로(-S).
+    static func startApp(serial: String, displayId: Int, app: AndroidApp,
+                         newInstance: Bool = false, restart: Bool = false) async throws {
+        var component = app.activity.map { "\(app.package)/\($0)" }
+        if component == nil {
+            let resolved = try await shell(
+                serial: serial,
+                "cmd package resolve-activity --brief -c android.intent.category.LAUNCHER \(app.package) | tail -n 1"
+            ).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard resolved.contains("/") else {
+                throw ADBError.failure("\(app.displayLabel): 실행할 수 있는 화면이 없는 앱입니다.")
+            }
+            component = resolved
+        }
+        var command = "am start --display \(displayId) --windowingMode 5"
+        if newInstance { command += " -f 0x18000000" }
+        if restart { command += " -S" }
+        command += " -n \(component!)"
+        let out = try await shell(serial: serial, command)
+        if out.contains("Error") || out.contains("Exception") {
+            throw ADBError.failure(out)
+        }
+    }
+
+    // MARK: 데스크톱 창 관리 (MacDroid 제목줄용)
+
+    /// 데스크톱 디스플레이의 앱 창(freeform 루트 태스크) — 위에 있는 창이 먼저.
+    struct DesktopWindow: Sendable, Equatable, Identifiable {
+        let id: Int              // 루트 태스크 id
+        let package: String
+        let component: String    // pkg/cls (앞으로 가져오기용)
+        let bounds: CGRect       // 디스플레이 px
+    }
+
+    /// 데스크톱 창 목록 + 디스플레이 크기(홈 태스크 bounds).
+    /* 파서 정책: `cmd activity stack list`는 루트 태스크를 z순서(위가 먼저)로
+       "RootTask id=N bounds=[l,t][r,b] displayId=D", configuration(mWindowingMode·mActivityType),
+       "taskId=N: pkg/cls ... visible=true" 순으로 낸다(실측 One UI 8/Android 17, 80ms).
+       변경 전: freeform만 창으로 봤다. 변경 후: 일반 앱(activityType=standard)이면 창 모드와 무관하게 창으로 본다 —
+       앱 안에서 연 다른 앱(링크 등)이 전체 화면으로 떠도 데스크톱에 보이게(전체 화면 = 최대화된 창).
+       영향 범위: MacDroid 데스크톱 창 목록. */
+    static func desktopWindows(serial: String, displayId: Int) async throws -> (windows: [DesktopWindow], displaySize: CGSize?) {
+        let out = try await shell(serial: serial, "cmd activity stack list")
+        var windows: [DesktopWindow] = []
+        var displaySize: CGSize?
+        var current: (id: Int, bounds: CGRect, standard: Bool, home: Bool, onDisplay: Bool)?
+
+        func rect(_ text: Substring) -> CGRect? {
+            let nums = text.split(whereSeparator: { !$0.isNumber && $0 != "-" }).compactMap { Int($0) }
+            guard nums.count >= 4 else { return nil }
+            return CGRect(x: nums[0], y: nums[1], width: nums[2] - nums[0], height: nums[3] - nums[1])
+        }
+        for line in out.split(separator: "\n") {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.hasPrefix("RootTask id=") {
+                let id = Int(t.dropFirst("RootTask id=".count).prefix { $0.isNumber }) ?? -1
+                let boundsText = t.range(of: #"bounds=\[[-\d,]+\]\[[-\d,]+\]"#, options: .regularExpression).map { t[$0] }
+                current = (id, boundsText.flatMap(rect) ?? .zero, false, false, t.contains("displayId=\(displayId) "))
+            } else if t.hasPrefix("configuration="), current != nil {
+                current!.standard = t.contains("mActivityType=standard")
+                current!.home = t.contains("mActivityType=home")
+            } else if t.hasPrefix("taskId="), let task = current, task.onDisplay {
+                current = nil  // 루트 태스크당 첫 태스크만
+                if task.home {
+                    displaySize = task.bounds.size
+                    continue
+                }
+                guard task.standard, t.contains("visible=true"),
+                      let colon = t.firstIndex(of: ":") else { continue }
+                let component = t[t.index(after: colon)...].split(separator: " ").first.map(String.init) ?? ""
+                guard let slash = component.firstIndex(of: "/") else { continue }
+                windows.append(DesktopWindow(id: task.id, package: String(component[..<slash]),
+                                             component: component, bounds: task.bounds))
+            }
+        }
+        return (windows, displaySize)
+    }
+
+    /// 창 이동·크기 변경(디스플레이 px).
+    static func moveWindow(serial: String, taskId: Int, to frame: CGRect) async {
+        let r = frame.integral
+        _ = try? await shell(serial: serial,
+                             "cmd activity task resize \(taskId) \(Int(r.minX)) \(Int(r.minY)) \(Int(r.maxX)) \(Int(r.maxY))")
+    }
+
+    /// 다른 디스플레이(폰 본 화면 등)에 이미 있는 앱 태스크를 데스크톱 디스플레이로 옮긴다.
+    /// am start는 기존 태스크가 있으면 '앞으로 가져오기'만 하고 원래 디스플레이에 남겨 두기 때문(실측).
+    static func moveAppToDisplay(serial: String, package: String, displayId: Int) async {
+        guard let out = try? await shell(serial: serial, "cmd activity stack list") else { return }
+        var root: (id: Int, onTarget: Bool)?
+        for line in out.split(separator: "\n") {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.hasPrefix("RootTask id=") {
+                let id = Int(t.dropFirst("RootTask id=".count).prefix { $0.isNumber }) ?? -1
+                root = (id, t.contains("displayId=\(displayId) "))
+            } else if t.hasPrefix("taskId="), let task = root {
+                root = nil
+                guard !task.onTarget, t.contains(": \(package)/") else { continue }
+                _ = try? await shell(serial: serial, "cmd activity display move-stack \(task.id) \(displayId)")
+                return
+            }
+        }
+    }
+
+    static func closeWindow(serial: String, taskId: Int) async {
+        _ = try? await shell(serial: serial, "cmd activity stack remove \(taskId)")
+    }
+
+    /// 최소화: 창을 데스크톱 디스플레이 오른쪽 아래 화면 밖으로 치운다(MacDroid는 최소화된 창을 그리지 않는다).
+    /* 변경 전 정책: 기기 본 화면(디스플레이 0)으로 옮겨 숨겼다 — 폰 화면에 그 앱이 튀어나왔다(사용자 보고).
+       변경 후 정책: 같은 데스크톱 디스플레이에 두고 오른쪽 아래 화면 밖(독 아래 구석, 안드로이드가 48px만 남김)으로
+         옮긴다 — 폰 화면은 건드리지 않는다. 복원은 원래 위치로 resize. 예전 방식으로 폰에 가 있던 창도 복원되게
+         복원 전에 데스크톱 디스플레이로 옮긴다(이미 있으면 영향 없음).
+       영향 범위: 데스크톱 창 최소화/복원, 홈 버튼(모두 최소화). */
+    static func minimizeWindow(serial: String, taskId: Int, parkAt frame: CGRect) async {
+        await moveWindow(serial: serial, taskId: taskId, to: frame)
+    }
+
+    static func restoreWindow(serial: String, taskId: Int, displayId: Int, frame: CGRect) async {
+        _ = try? await shell(serial: serial, "cmd activity display move-stack \(taskId) \(displayId)")
+        await moveWindow(serial: serial, taskId: taskId, to: frame)
+    }
+
+    /// 창을 맨 앞으로(같은 액티비티를 그 디스플레이에 다시 start하면 기존 태스크가 앞으로 온다).
+    static func focusWindow(serial: String, displayId: Int, component: String) async {
+        _ = try? await shell(serial: serial, "am start --display \(displayId) -n \(component)")
+    }
+
+    // MARK: 데스크톱 상태표시줄 (소리·밝기·알림)
+
+    /// 미디어 볼륨(현재, 최대) — "volume is 7 in range [0..15]".
+    static func mediaVolume(serial: String) async -> (value: Int, max: Int)? {
+        guard let out = try? await shell(serial: serial, "cmd media_session volume --stream 3 --get"),
+              let range = out.range(of: #"volume is (\d+) in range \[(\d+)\.\.(\d+)\]"#, options: .regularExpression)
+        else { return nil }
+        let nums = out[range].split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+        guard nums.count >= 3 else { return nil }
+        return (nums[0], nums[2])
+    }
+
+    static func setMediaVolume(serial: String, _ value: Int) async {
+        _ = try? await shell(serial: serial, "cmd media_session volume --stream 3 --set \(value)")
+    }
+
+    /// 화면 밝기(0~255)와 자동 밝기 여부.
+    static func brightness(serial: String) async -> (value: Int, auto: Bool)? {
+        guard let out = try? await shell(serial: serial,
+                                         "settings get system screen_brightness; settings get system screen_brightness_mode")
+        else { return nil }
+        let lines = out.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+        guard lines.count >= 2, let value = Int(lines[0]) else { return nil }
+        return (value, lines[1] == "1")
+    }
+
+    /// 밝기 설정 — 직접 값을 정하면 자동 밝기는 끈다(켜 두면 시스템이 곧 되돌린다).
+    static func setBrightness(serial: String, _ value: Int) async {
+        _ = try? await shell(serial: serial,
+                             "settings put system screen_brightness_mode 0; settings put system screen_brightness \(max(1, min(value, 255)))")
+    }
+
+    static func setAutoBrightness(serial: String, _ on: Bool) async {
+        _ = try? await shell(serial: serial, "settings put system screen_brightness_mode \(on ? 1 : 0)")
+    }
+
+    struct PhoneNotification: Sendable, Identifiable, Equatable {
+        let id: String        // 알림 key
+        let package: String
+        let title: String
+        let text: String
+        let posted: Date?
+    }
+
+    /// 폰 알림 목록(최근 것이 먼저) — `dumpsys notification --noredact`의 Notification List 구역.
+    /* 파서 정책: "NotificationRecord(… pkg=P … key=K: Notification(… flags=F …))" 줄로 레코드를 나누고, 그 안의
+       when=, android.title=, android.text=/bigText= 값을 읽는다(값 형식 "String (내용)"/"null", 실측 One UI 8).
+       묶음 요약(GROUP_SUMMARY)·상시 알림(ONGOING_EVENT)·제목/내용 없는 알림은 뺀다. 구역은 들여쓰기 2칸 머리줄에서 끝난다. */
+    static func notifications(serial: String) async -> [PhoneNotification] {
+        guard let out = try? await shell(serial: serial, "dumpsys notification --noredact") else { return [] }
+        var result: [PhoneNotification] = []
+        var inList = false
+        var current: (key: String, pkg: String, skip: Bool, title: String?, text: String?, when: Date?)?
+
+        func value(_ line: Substring, after prefix: String) -> String? {
+            let raw = line.dropFirst(prefix.count)
+            guard !raw.hasPrefix("null"), let open = raw.firstIndex(of: "("), let close = raw.lastIndex(of: ")"),
+                  open < close else { return nil }
+            let text = raw[raw.index(after: open)..<close].trimmingCharacters(in: .whitespaces)
+            return text.isEmpty ? nil : text
+        }
+        func flush() {
+            guard let c = current, !c.skip, c.title != nil || c.text != nil else { return }
+            result.append(PhoneNotification(id: c.key, package: c.pkg, title: c.title ?? "", text: c.text ?? "",
+                                            posted: c.when))
+        }
+
+        for rawLine in out.split(separator: "\n", omittingEmptySubsequences: false) {
+            if rawLine.hasPrefix("  Notification List:") { inList = true; continue }
+            guard inList else { continue }
+            if rawLine.hasPrefix("  "), !rawLine.hasPrefix("   ") { break }   // 다음 구역
+            let line = rawLine.drop { $0 == " " }
+            if line.hasPrefix("NotificationRecord(") {
+                flush()
+                let text = String(line)
+                func field(_ name: String, until end: Character) -> String {
+                    guard let r = text.range(of: name) else { return "" }
+                    return String(text[r.upperBound...].prefix { $0 != end })
+                }
+                let key = text.range(of: "key=").map { r in
+                    String(text[r.upperBound...].components(separatedBy: ": Notification(").first ?? "")
+                } ?? UUID().uuidString
+                let flags = field("flags=", until: " ")
+                current = (key, field("pkg=", until: " "),
+                           flags.contains("GROUP_SUMMARY") || flags.contains("ONGOING_EVENT"), nil, nil, nil)
+            } else if current != nil {
+                if line.hasPrefix("android.title="), current?.title == nil {
+                    current?.title = value(line, after: "android.title=")
+                } else if line.hasPrefix("android.bigText=") {
+                    if let big = value(line, after: "android.bigText=") { current?.text = big }
+                } else if line.hasPrefix("android.text="), current?.text == nil {
+                    current?.text = value(line, after: "android.text=")
+                } else if line.hasPrefix("when="), current?.when == nil,
+                          let ms = Double(line.dropFirst(5).prefix { $0.isNumber }), ms > 0 {
+                    current?.when = Date(timeIntervalSince1970: ms / 1000)
+                }
+            }
+        }
+        flush()
+        return result.sorted { ($0.posted ?? .distantPast) > ($1.posted ?? .distantPast) }
+    }
+
+    /// 알림 닫기.
+    /* 정책: 셸(uid 2000)은 다른 앱의 알림을 취소(cancel)할 권한이 없다. 대신 `cmd notification snooze`는 허용되어
+       100년 동안 다시 알리기로 미뤄 폰 알림창에서도 사라지게 한다(실측: 목록에서 즉시 빠짐). 사실상 닫기. */
+    static func dismissNotification(serial: String, key: String) async {
+        _ = try? await shell(serial: serial, "cmd notification snooze --for 3153600000000 \(shellQuoted(key))")
+    }
+
+    /// 블루투스 켜짐 여부.
+    static func bluetoothOn(serial: String) async -> Bool? {
+        guard let out = try? await shell(serial: serial, "settings get global bluetooth_on") else { return nil }
+        return out.trimmingCharacters(in: .whitespacesAndNewlines) == "1"
+    }
+
+    /// 데스크톱 디스플레이에 시스템 화면(설정 액션)을 창으로 연다.
+    static func openSystemPage(serial: String, displayId: Int, action: String) async {
+        _ = try? await shell(serial: serial, "am start --display \(displayId) --windowingMode 5 -a \(action)")
+    }
+
+    /// 기기가 잠들었거나(Dozing/Asleep) 화면보호기(Dreaming)면 깨운다 — 잠금은 풀지 않는다.
+    /* 정책: 잠금(키가드) 상태여도 기기가 깨어 있으면 데스크톱 가상 디스플레이는 정상 동작한다(실측: PIN 잠금,
+       deviceLocked=1에서 앱 실행·표시 OK). 잠들면 가상 디스플레이도 검게 꺼지므로 데스크톱 세션 동안 깨워 둔다. */
+    @discardableResult
+    static func wakeIfAsleep(serial: String) async -> Bool {
+        guard let out = try? await shell(serial: serial, "dumpsys power | grep -m1 mWakefulness="),
+              !out.contains("Awake") else { return false }
+        _ = try? await shell(serial: serial, "input keyevent KEYCODE_WAKEUP")
+        return true
+    }
+
+    /// 예전 버전 MacDroid가 남긴 데스크톱 wakelock 정리(셸이 잡은 화면 wakelock = MacDroid 것).
+    /* 정책: 지금은 폰 전원을 건드리지 않는다(DesktopSession '폰 상태' 정책). 다만 이전 버전이 데스크톱 디스플레이에
+       잡아 둔 화면 wakelock이 남아 있으면 폰이 잠들지 못하므로 데스크톱을 열 때 놓아 준다. */
+    static func releaseStaleDesktopWakelocks(serial: String) async {
+        guard let list = try? await shell(serial: serial, "cmd power set-wakelock list") else { return }
+        for line in list.split(separator: "\n") where line.contains("held=true") {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            guard t.hasPrefix("Display "),
+                  let id = Int(t.dropFirst("Display ".count).prefix { $0.isNumber }),
+                  let typeRange = t.range(of: #"wakelock type: [A-Z_]+"#, options: .regularExpression)
+            else { continue }
+            let type = t[typeRange].dropFirst("wakelock type: ".count)
+            _ = try? await shell(serial: serial, "cmd power set-wakelock release -d \(id) \(type)")
+        }
+    }
+
     // MARK: 절전 방지 (DeX 세션 동안 기기 잠금 방지)
 
     /* 정책: DeX/미러 세션이 살아 있는 동안 stay_on_while_plugged_in을 모든 전원(7)으로

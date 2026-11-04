@@ -125,6 +125,13 @@ enum Scrcpy {
         return args
     }
 
+    /// scrcpy 서버 로그에서 새 가상 디스플레이 id 추출: "[server] INFO: New display: 1600x1000/160 (id=33)".
+    static func parseNewDisplayID(_ line: String) -> Int? {
+        guard line.contains("New display"),
+              let range = line.range(of: #"\(id=(\d+)\)"#, options: .regularExpression) else { return nil }
+        return Int(line[range].filter(\.isNumber))
+    }
+
     /// 세션 실행. 종료 이벤트는 SessionEvents로 방출된다(AppState가 정리).
     /// - Returns: 실행된 프로세스 핸들(세션에 attach해서 종료 가능하게).
     static func launch(arguments: [String], sessionID: String) throws -> StreamingProcess {

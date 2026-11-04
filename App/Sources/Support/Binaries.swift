@@ -49,6 +49,11 @@ enum Binaries {
     static var scrcpy: URL { resolvedDir.appending(path: "scrcpy") }
     static var aapt2: URL { resolvedDir.appending(path: "aapt2") }
 
+    /// 기기에서 실행하는 앱 인덱서(dex jar) — scripts/build-helper.sh가 만든다.
+    static var appIndexJar: URL {
+        resolvedDir.deletingLastPathComponent().appending(path: "share/macdroid/appindex.jar")
+    }
+
     static var scrcpyServer: URL {
         // scrcpy 바이너리 기준 상대 위치: <bin>/../share/scrcpy/scrcpy-server
         resolvedDir.deletingLastPathComponent()

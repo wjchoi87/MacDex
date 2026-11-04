@@ -8,6 +8,70 @@ import AppKit
 enum AppCatalog {
 
     private static let maxApkBytes = 80 * 1024 * 1024
+    private static let remoteIndexJar = "/data/local/tmp/macdroid-appindex.jar"
+
+    /// 폰 런처(앱 서랍)와 같은 앱 목록 + 실제 라벨·아이콘 — 기기에서 인덱서(app_process)를 돌려 한 번에 받는다.
+    /* 변경 전 정책: `pm list packages -3`(서드파티만) + 보이는 타일마다 APK를 통째로 받아 aapt2로 라벨/아이콘 추출.
+         실측: 느리고(APK 다운로드), adaptive/벡터 아이콘 대부분 실패해 모노그램만 보였다. 시스템 앱(카메라·설정 등)은 빠졌다.
+       변경 후 정책: 기기 PackageManager로 런처 액티비티 목록을 실제 라벨·렌더링된 아이콘(PNG)과 함께 받는다(282개 ≈ 3초).
+         일부 아이콘은 그리는 중 네이티브 abort(Samsung 캘린더 — gDefaultTypeface assert)로 인덱서가 죽는다 →
+         마지막 BEGIN 앱부터 이어서(그 앱은 라벨만) 재실행한다(최대 6회).
+       영향 범위: 앱 런처·CLI 앱 목록. 인덱서가 없거나 실패하면 nil → 호출부가 기존 방식으로 폴백. */
+    static func loadIndex(serial: String, iconSize: Int = 128) async -> [AndroidApp]? {
+        let env = Binaries.processEnvironment
+        guard FileManager.default.fileExists(atPath: Binaries.appIndexJar.path),
+              let pushed = try? await ProcessRunner.run(
+                Binaries.adb, arguments: ["-s", serial, "push", Binaries.appIndexJar.path, remoteIndexJar],
+                environment: env, timeout: 15),
+              pushed.succeeded else { return nil }
+
+        var apps: [String: AndroidApp] = [:]
+        var resumeAt: String?
+        for _ in 0..<6 {
+            var command = "CLASSPATH=\(remoteIndexJar) app_process / kr.macdroid.AppIndex \(iconSize)"
+            if let resumeAt { command += " \(resumeAt)" }
+            guard let result = try? await ProcessRunner.run(
+                Binaries.adb, arguments: ["-s", serial, "shell", command], environment: env, timeout: 90
+            ) else { break }
+
+            var unfinished: String?
+            for line in result.stdout.split(separator: "\n") {
+                let fields = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+                if fields.first == "BEGIN", fields.count >= 2 {
+                    unfinished = fields[1]
+                } else if fields.first == "APP", fields.count >= 5 {
+                    unfinished = nil
+                    apps[fields[1]] = storeIndexed(package: fields[1], activity: fields[2],
+                                                   label: fields[3], iconBase64: fields[4])
+                }
+            }
+            // 정상 종료(미완료 BEGIN 없음) 또는 같은 앱에서 또 죽으면 끝
+            guard let crashed = unfinished, crashed != resumeAt else { break }
+            resumeAt = crashed
+        }
+        guard !apps.isEmpty else { return nil }
+        return apps.values.sorted {
+            $0.displayLabel.localizedStandardCompare($1.displayLabel) == .orderedAscending
+        }
+    }
+
+    /// 인덱서 결과를 IconCache(라벨·아이콘)에 저장하고 AndroidApp으로 돌려준다.
+    private static func storeIndexed(package: String, activity: String, label: String, iconBase64: String) -> AndroidApp {
+        var app = AndroidApp(package: package, apkPath: nil)
+        app.activity = activity.isEmpty ? nil : activity
+        app.label = label.isEmpty ? nil : label
+        let iconFile = Binaries.iconCache.appending(path: package + ".png")
+        if let label = app.label {
+            try? label.data(using: .utf8)?.write(to: Binaries.iconCache.appending(path: package + ".label"))
+        }
+        if let data = Data(base64Encoded: iconBase64), !data.isEmpty {
+            try? data.write(to: iconFile, options: .atomic)
+            app.iconURL = iconFile
+        } else if FileManager.default.fileExists(atPath: iconFile.path) {
+            app.iconURL = iconFile
+        }
+        return app
+    }
 
     /// 라벨+아이콘 로드 결과(캐시 포함). 실패/생략 시 nil 유지 → UI 폴백.
     static func loadMetadata(serial: String, app: AndroidApp) async -> AndroidApp {
