@@ -20,7 +20,16 @@
 
 ## 설치
 
-### 준비물
+### 내려받기 (추천)
+
+1. [Releases](https://github.com/wjchoi87/MacDroid/releases/latest)에서 `MacDroid-<버전>-macos-arm64.zip`을 받습니다(Apple Silicon, macOS 14 이상)
+2. 압축을 풀고 **MacDroid.app**을 **응용 프로그램** 폴더로 옮깁니다
+3. 처음 실행: 아직 Apple 공증 전이라, MacDroid.app을 **우클릭 → 열기 → 열기** 하세요(또는 시스템 설정 → 개인정보 보호 및 보안 → **그래도 열기**). 처음 한 번만 하면 됩니다
+4. **로컬 네트워크** 접근을 물으면 허용하세요(Wi-Fi 기기에 필요)
+
+adb와 scrcpy가 앱에 들어 있어서 따로 설치할 것이 없습니다. CLI(`macdroid-cli-<버전>-macos-arm64.zip`, 선택)는 `/Applications/MacDroid.app` 안의 도구를 씁니다.
+
+### 준비물 (소스에서 빌드할 때)
 
 - macOS 14.0(Sonoma) 이상
 - [Xcode](https://developer.apple.com/xcode/) 16 이상(커맨드라인 빌드만으로 충분)
@@ -50,6 +59,8 @@ xcodebuild -project MacDroid.xcodeproj -scheme MacDroid -configuration Release b
 # 5. 실행
 open build/DerivedData/Build/Products/Release/MacDroid.app
 ```
+
+릴리스용 압축 파일(앱 + CLI + SHA256SUMS)은 `./scripts/package-release.sh`로 만듭니다. `--publish`를 붙이면 GitHub 릴리스까지 만듭니다.
 
 빌드 스크립트(`scripts/fetch-vendor.sh`, `scripts/build-helper.sh`)가 `adb`, `scrcpy`(dylib 포함), `aapt2`, 앱 인덱서를 앱 안에 묶어 줍니다. 그래서 완성된 앱은 **외부 의존성이 없습니다**. 실제 사용자는 Homebrew, JDK, Android SDK 없이 바로 실행할 수 있어요.
 

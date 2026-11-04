@@ -13,3 +13,6 @@ Vendor/
 # 임시
 *.log
 tmp/
+
+# 릴리스 패키지 (scripts/package-release.sh)
+dist/

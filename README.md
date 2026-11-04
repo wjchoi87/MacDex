@@ -20,7 +20,16 @@ Built on [scrcpy](https://github.com/Genymobile/scrcpy) (Apache-2.0) for the str
 
 ## Installation
 
-### Requirements
+### Download (recommended)
+
+1. Download `MacDroid-<version>-macos-arm64.zip` from [Releases](https://github.com/wjchoi87/MacDroid/releases/latest) (Apple Silicon, macOS 14+)
+2. Unzip and move **MacDroid.app** to **Applications**
+3. First launch: MacDroid isn't notarized by Apple yet, so right-click MacDroid.app → **Open** → **Open** (or System Settings → Privacy & Security → **Open Anyway**). You only need to do this once
+4. Allow **Local Network** access when asked (needed for Wi-Fi devices)
+
+adb and scrcpy are bundled — nothing else to install. The optional CLI (`macdroid-cli-<version>-macos-arm64.zip`) uses the tools inside `/Applications/MacDroid.app`.
+
+### Requirements (building from source)
 
 - macOS 14.0 (Sonoma) or later
 - [Xcode](https://developer.apple.com/xcode/) 16 or later (a command-line build is enough)
@@ -50,6 +59,8 @@ xcodebuild -project MacDroid.xcodeproj -scheme MacDroid -configuration Release b
 # 5. Run
 open build/DerivedData/Build/Products/Release/MacDroid.app
 ```
+
+To make release zips (app + CLI + SHA256SUMS) run `./scripts/package-release.sh` — add `--publish` to create the GitHub release.
 
 The build scripts (`scripts/fetch-vendor.sh`, `scripts/build-helper.sh`) bundle `adb`, `scrcpy` (with its dylib tree), `aapt2` and the app indexer into the app, so the finished app has **no external dependencies** — end users never need Homebrew, a JDK or the Android SDK to run it.
 
