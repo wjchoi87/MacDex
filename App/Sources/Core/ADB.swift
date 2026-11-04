@@ -396,6 +396,40 @@ enum ADB {
                              "cmd activity task resize \(taskId) \(Int(r.minX)) \(Int(r.minY)) \(Int(r.maxX)) \(Int(r.maxY))")
     }
 
+    /// 지금 떠 있는 MacDroid 데스크톱의 가상 디스플레이 id(없으면 nil) — CLI가 데스크톱에 앱을 열거나 창을 다룰 때.
+    /* 판별: MacDroid 데스크톱 서버(vd_system_decorations=false)가 돌고 있고, "scrcpy" 가상 디스플레이 중
+       홈(런처) 태스크가 없는 것(시스템 장식 없는 디스플레이 — CLI app launch 창은 런처가 붙는다). 여럿이면 가장 최근(id 최대). */
+    static func macdroidDesktopDisplayId(serial: String) async -> Int? {
+        guard let running = try? await shell(serial: serial,
+                                             "pgrep -f '[s]crcpy.Server 4.1 .*vd_system_decorations=false' || true"),
+              !running.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let displays = try? await shell(serial: serial, "dumpsys display | grep -o 'DisplayInfo{\"scrcpy\", displayId [0-9]*'")
+        else { return nil }
+        let candidates = Set(displays.split(separator: "\n").compactMap { Int($0.split(separator: " ").last ?? "") })
+        guard !candidates.isEmpty else { return nil }
+        var withHome = Set<Int>()
+        if let stacks = try? await shell(serial: serial, "cmd activity stack list") {
+            var display: Int?
+            for line in stacks.split(separator: "\n") {
+                let t = line.trimmingCharacters(in: .whitespaces)
+                if t.hasPrefix("RootTask id="), let r = t.range(of: "displayId=") {
+                    display = Int(t[r.upperBound...].prefix { $0.isNumber })
+                } else if t.hasPrefix("configuration="), t.contains("mActivityType=home"), let display {
+                    withHome.insert(display)
+                }
+            }
+        }
+        return candidates.subtracting(withHome).max()
+    }
+
+    /// 디스플레이 크기(px) — `wm size -d`.
+    static func displaySize(serial: String, displayId: Int) async -> CGSize? {
+        guard let out = try? await shell(serial: serial, "wm size -d \(displayId)"),
+              let r = out.range(of: #"\d+x\d+"#, options: .regularExpression) else { return nil }
+        let parts = out[r].split(separator: "x").compactMap { Double($0) }
+        return parts.count == 2 ? CGSize(width: parts[0], height: parts[1]) : nil
+    }
+
     /// 다른 디스플레이(폰 본 화면 등)에 이미 있는 앱 태스크를 데스크톱 디스플레이로 옮긴다.
     /// am start는 기존 태스크가 있으면 '앞으로 가져오기'만 하고 원래 디스플레이에 남겨 두기 때문(실측).
     static func moveAppToDisplay(serial: String, package: String, displayId: Int) async {

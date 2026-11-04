@@ -8,7 +8,7 @@ Built on [scrcpy](https://github.com/Genymobile/scrcpy) (Apache-2.0) for the str
 
 - **Screen mirroring** — ultra-low-latency mirroring with hardware decoding (Metal + VideoToolbox), quality presets (Balanced / Crisp / Lightweight) and full manual control (codec, bitrate, resolution, fps)
 - **DeX mode** — launch Android apps in separate windows, each on its own **independent virtual display**; the phone screen stays untouched, and multiple apps run at the same time. Launching an app that is already running asks whether you want a separate new instance or to restart it
-- **DeX desktop** — Samsung phones: open the full DeX desktop (taskbar, wallpaper, app grid) in a single window, via a virtual display + the One UI `SecondaryLauncher`. Non-Samsung devices don't get this button
+- **DeX desktop** — MacDroid's own desktop shell in one Mac window: wallpaper, status bar (notifications, Wi-Fi/Bluetooth/battery pages, brightness/volume, calendar), a floating Mac-style dock, desktop icons and folders. Android apps open as windows inside it in ~0.1 s — all from a single video stream, cropped per window by MacDroid. Windows have Mac title bars (close/minimize/maximize/back), drag, resize and edge snapping. The phone's own screen and power state are never touched
 - **Physical keyboard & mouse** — uhid mode gives you hover, game keys, and your phone's IME (Korean/Japanese/…) exactly like a hardware keyboard
 - **Wireless** — pair with a 6-digit code, connect directly by IP, discover devices via mDNS, or switch a USB connection to Wi-Fi in one click
 - **File transfer** — send files to the phone's Download folder
@@ -66,14 +66,14 @@ ADB_SRC=/path/to/adb AAPT2_SRC=/path/to/aapt2 SCRCPY_SRC=/path/to/scrcpy ./scrip
 
 - **Mirror** — select the device, click *Screen mirroring*
 - **DeX windows** — open the app launcher and double-click any app; it opens in its own window on a virtual display (the phone screen is unaffected). Open as many apps as you like — each gets its own window, like using a desktop OS. Double-clicking a running app asks whether to open a separate new instance or restart it
-- **DeX desktop** — MacDroid's own DeX, works on any device: a virtual-display *monitor* window plus a Mac-side **DeX dock** panel (app grid with search, open-apps list for switching, back key, one-click exit). Click an app in the dock and it opens on the DeX monitor. On Samsung devices the DeX launcher (taskbar, wallpaper) is additionally started on the display as a bonus
+- **DeX desktop** — click *DeX desktop*. Open apps from the dock (left button = app drawer), desktop icons (double-click or Enter) or the app launcher; they open as windows inside the desktop. Drag a title bar to a screen edge to snap (halves, quarters, maximize). Home (bottom-left) minimizes every window; Esc or the mouse back button = Android back. Right-click the wallpaper for new folders / wallpaper, drag on the wallpaper to select several icons (Delete removes them). If the phone falls asleep the desktop pauses and offers a *Wake phone* button — MacDroid never wakes, sleeps or turns off the phone screen on its own
 - **Go wireless** — with a USB device selected, click *Switch to wireless*, then unplug the cable
 - **One-click recovery** — *Repair connection* (pair sheet & empty state) restarts the adb server only if it is stuck, reconnects wireless devices you've used before, retries discovery and refreshes the list. If nothing shows up, it tells you what to check on the phone and on the Mac. Device tracking also self-heals if the adb server dies, and the pair sheet has a close button (Esc works too)
 - **Reliable wireless connect** — a connection only counts as connected once the device actually reports `device` state; stale `offline` transports are cleaned up before and after every attempt, so a failed try never poisons the next one
 - **Auto-discovery & Local Network permission** — MacDroid browses Bonjour itself (`_adb-tls-connect` / `_adb-tls-pairing`), so discovery does not depend on whoever started the adb server. macOS blocks LAN access for an adb server started by a process without Local Network permission (e.g. a terminal): when MacDroid can reach a LAN device but the adb server can't, MacDroid restarts the server under its own permission and retries once. If MacDroid itself is blocked, enable it in System Settings → Privacy & Security → Local Network
 - **Settings** — quality presets, codec/bitrate/resolution/fps, audio, virtual display resolution & DPI, uhid advanced input. Capture fps is unlimited by default; virtual displays are capped at 60 Hz by the device itself, and smoothness at 1080p mostly depends on bitrate (default 20 Mbps)
 - Shortcuts inside mirroring windows are scrcpy's own (`MOD+F` fullscreen, …) — see `scrcpy --help`
-- While any DeX/mirror session is running, the phone is kept from sleeping (`stay_on_while_plugged_in`); your previous setting is restored when the last session closes
+- While a mirror/app-window session is running, the phone is kept from sleeping (`stay_on_while_plugged_in`); your previous setting is restored when the last session closes. The DeX desktop does not change any power setting
 
 ## CLI for agents and scripts
 
@@ -87,7 +87,7 @@ M=build/DerivedData/Build/Products/Debug/macdroid
 
 $M devices --json                       # [{"serial": "...", "state": "device", "connection": "usb"}]
 $M info <serial> --json                 # model, Android version, battery, screen
-$M app list <serial> --json             # installed apps (add --labels to resolve names)
+$M app list <serial> --json             # installed apps (--labels: real names via on-device indexer, ~3 s)
 $M app launch <serial> com.example.app --json
 # → {"displayId": 11, "session": "...", "pid": ...}   ← use displayId for -d below
 $M screenshot <serial> shot.png -d 11   # capture that virtual display
@@ -95,6 +95,19 @@ $M tap <serial> 960 400 -d 11           # tap on that display
 $M text <serial> "hello world"          # ASCII text injection
 $M key <serial> back                    # back/home/enter/wakeup/power/volume_up... or a keycode
 $M app stop <serial> com.example.app    # (or: app stop <serial> --all)
+
+# with the DeX desktop open in MacDroid
+$M desktop <serial> --json              # {"running": true, "displayId": 95, "width": 2880, ...}
+$M app open <serial> com.android.settings   # open as a window inside the desktop (~0.1 s)
+$M window list <serial> --json          # taskId, package, bounds (front-most first)
+$M window move <serial> com.android.settings 200 200 1200 1100
+$M window maximize|focus|close <serial> <taskId|package>
+$M screenshot <serial> desk.png -d 95   # capture / tap / text on the desktop display
+
+$M notifications <serial> --json        # phone notifications (key, package, title, text)
+$M notifications dismiss <serial> <key>
+$M volume <serial> [0-15]               # media volume
+$M brightness <serial> [1-255|auto]
 $M mirror start <serial>                # plain screen mirroring window
 $M mirror stop <serial>
 $M push <serial> file.pdf               # → /sdcard/Download/
@@ -122,8 +135,9 @@ Notes:
 ```
 
 - **Streaming core** — the bundled `scrcpy` binary renders with SDL3/Metal and decodes via VideoToolbox; `scrcpy-server` runs on the phone through ADB
-- **DeX windows** — each window is a separate scrcpy instance with `--new-display` + `--start-app`, giving every app its own virtual display
-- **App icons & names** — pulled lazily from the device (`pm list` + APK + `aapt2`), cached locally
+- **DeX desktop** — MacDroid talks to `scrcpy-server` directly (no scrcpy window): one virtual display without system decorations, H.264 decoded with VideoToolbox, and every Android freeform window is drawn as a crop of that single stream (IOSurface + `contentsRect`). Input goes back over scrcpy's control socket; window positions come from `cmd activity stack list`
+- **DeX windows (app launch / CLI)** — each window is a separate scrcpy instance with `--new-display` + `--start-app`, giving every app its own virtual display
+- **App icons & names** — an on-device indexer (`Helper/AppIndex`, run with `app_process`) returns every launcher app with its real label and rendered icon in one pass; falls back to `pm list` + APK + `aapt2`
 - **Device tracking** — `adb track-devices` with a proper length-prefixed frame parser
 
 ## Third-party software
