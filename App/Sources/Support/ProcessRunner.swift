@@ -18,7 +18,7 @@ enum ProcessError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .launchFailed(let message): return message
-        case .timedOut(let name, let seconds): return "\(name)이(가) \(seconds)초 내에 응답하지 않았습니다"
+        case .timedOut(let name, let seconds): return String(localized: "\(name)이(가) \(seconds)초 내에 응답하지 않았습니다")
         }
     }
 }

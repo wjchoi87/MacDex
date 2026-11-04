@@ -6,11 +6,14 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
 
-    @State private var cacheSize: String = "계산 중…"
+    @State private var cacheSize: String = String(localized: "계산 중…")
 
     var body: some View {
         @Bindable var state = appState
         TabView {
+            GeneralSettings()
+                .tabItem { Label("일반", systemImage: "gearshape") }
+
             Form {
                 Section("화면 품질") {
                     Picker("프리셋", selection: Binding(
@@ -186,5 +189,88 @@ struct SettingsView: View {
             total + Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
         }
         return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+}
+
+// MARK: - 일반(언어)
+
+/// 앱 언어 선택 — 시스템 설정 / English / 한국어.
+/* 정책: 앱 단위 AppleLanguages(UserDefaults)를 바꾼다 — 메뉴·오류 문구까지 모두 같은 언어가 되도록 macOS 표준
+   방식을 쓴다. 바뀐 언어는 다시 시작해야 적용되므로 바로 다시 시작할 수 있게 한다. '시스템 설정'은 값을 지워
+   맥의 언어 순서를 따르게 한다. 영향 범위: MacDroid 화면 전체(CLI는 영향 없음). */
+enum AppLanguage: String, CaseIterable, Identifiable {
+    case system, english, korean
+
+    var id: String { rawValue }
+
+    var code: String? {
+        switch self {
+        case .system: nil
+        case .english: "en"
+        case .korean: "ko"
+        }
+    }
+
+    /// 언어 이름은 그 언어로 표시한다(어느 언어 화면에서든 찾기 쉽게).
+    var title: String {
+        switch self {
+        case .system: String(localized: "시스템 설정 따르기")
+        case .english: "English"
+        case .korean: "한국어"
+        }
+    }
+
+    static var current: AppLanguage {
+        guard let saved = UserDefaults.standard.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "")?["AppleLanguages"] as? [String],
+              let first = saved.first else { return .system }
+        if first.hasPrefix("ko") { return .korean }
+        if first.hasPrefix("en") { return .english }
+        return .system
+    }
+
+    func apply() {
+        if let code {
+            UserDefaults.standard.set([code], forKey: "AppleLanguages")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+    }
+}
+
+private struct GeneralSettings: View {
+    @State private var language = AppLanguage.current
+    @State private var applied = AppLanguage.current
+
+    var body: some View {
+        Form {
+            Section("언어") {
+                Picker("앱 언어", selection: $language) {
+                    ForEach(AppLanguage.allCases) { option in
+                        Text(option.title).tag(option)
+                    }
+                }
+                .onChange(of: language) { _, value in value.apply() }
+                if language != applied {
+                    HStack {
+                        Text("다시 시작하면 적용됩니다")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("지금 다시 시작") { relaunch() }
+                            .buttonStyle(.borderedProminent)
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    /// 새 인스턴스를 띄우고 지금 것을 끝낸다(열린 미러·데스크톱 세션은 종료 처리).
+    private func relaunch() {
+        let path = Bundle.main.bundlePath
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", "sleep 1; /usr/bin/open \"$0\"", path]
+        try? process.run()
+        NSApp.terminate(nil)
     }
 }

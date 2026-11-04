@@ -178,7 +178,7 @@ private struct StatusBar: View {
         HStack(spacing: 4) {
             // 창 신호등 자리(hiddenTitleBar)
             Color.clear.frame(width: 64, height: 1)
-            panelItem(.menu, help: "설정") {
+            panelItem(.menu, help: String(localized: "설정")) {
                 Image(systemName: "dock.rectangle")
                 Text("MacDroid").fontWeight(.semibold)
             }
@@ -192,21 +192,21 @@ private struct StatusBar: View {
                     .help("최소화된 창")
                     .padding(.horizontal, 6)
             }
-            panelItem(.notifications, help: "알림") {
+            panelItem(.notifications, help: String(localized: "알림")) {
                 Image(systemName: session.notifications.isEmpty ? "bell" : "bell.badge")
                 if !session.notifications.isEmpty {
                     Text("\(session.notifications.count)").monospacedDigit()
                 }
             }
-            StatusItem(help: device?.isUSB == true ? "USB 연결 · 폰 Wi-Fi 설정 열기" : "폰 Wi-Fi 설정 열기") {
+            StatusItem(help: device?.isUSB == true ? String(localized: "USB 연결 · 폰 Wi-Fi 설정 열기") : String(localized: "폰 Wi-Fi 설정 열기")) {
                 activePanel = nil
                 session.openSystemPage("android.settings.WIFI_SETTINGS")
             } label: {
                 Image(systemName: device?.isUSB == true ? "cable.connector" : "wifi")
             }
-            panelItem(.brightness, help: "밝기") { Image(systemName: "sun.max") }
-            panelItem(.volume, help: "소리") { Image(systemName: "speaker.wave.2") }
-            StatusItem(help: session.bluetoothOn == false ? "블루투스 꺼짐 · 블루투스 설정 열기" : "블루투스 설정 열기") {
+            panelItem(.brightness, help: String(localized: "밝기")) { Image(systemName: "sun.max") }
+            panelItem(.volume, help: String(localized: "소리")) { Image(systemName: "speaker.wave.2") }
+            StatusItem(help: session.bluetoothOn == false ? String(localized: "블루투스 꺼짐 · 블루투스 설정 열기") : String(localized: "블루투스 설정 열기")) {
                 activePanel = nil
                 session.openSystemPage("android.settings.BLUETOOTH_SETTINGS")
             } label: {
@@ -216,7 +216,7 @@ private struct StatusBar: View {
                     .opacity(session.bluetoothOn == false ? 0.4 : 1)
             }
             if let level = device?.batteryLevel {
-                StatusItem(help: "배터리 설정 열기") {
+                StatusItem(help: String(localized: "배터리 설정 열기")) {
                     activePanel = nil
                     session.openSystemPage("android.intent.action.POWER_USAGE_SUMMARY", package: "com.samsung.android.lool")
                 } label: {
@@ -224,7 +224,7 @@ private struct StatusBar: View {
                     Text("\(level)%").monospacedDigit()
                 }
             }
-            panelItem(.calendar, help: "달력") { SystemClock() }
+            panelItem(.calendar, help: String(localized: "달력")) { SystemClock() }
         }
         .font(.system(size: 12.5))
         .foregroundStyle(.white)
@@ -418,12 +418,12 @@ private struct StatusPanelView: View {
         switch panel {
         case .menu:
             VStack(alignment: .leading, spacing: 2) {
-                MenuRow(title: "폰 설정 열기", symbol: "gearshape") {
+                MenuRow(title: String(localized: "폰 설정 열기"), symbol: "gearshape") {
                     active = nil
                     session.activate("com.android.settings")
                 }
                 SettingsLink {
-                    MenuRowLabel(title: "MacDroid 설정…", symbol: "macwindow")
+                    MenuRowLabel(title: String(localized: "MacDroid 설정…"), symbol: "macwindow")
                 }
                 .buttonStyle(.plain)
                 .simultaneousGesture(TapGesture().onEnded { active = nil })
@@ -666,7 +666,7 @@ private struct NotificationList: View {
             .padding(12)
             Divider()
             if session.notifications.isEmpty {
-                Text(refreshing ? "불러오는 중…" : "알림이 없습니다")
+                Text(refreshing ? String(localized: "불러오는 중…") : String(localized: "알림이 없습니다"))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
                     .padding(30)
@@ -836,7 +836,7 @@ private struct Wallpaper: View {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.image]
         panel.allowsMultipleSelection = false
-        panel.prompt = "배경화면으로 사용"
+        panel.prompt = String(localized: "배경화면으로 사용")
         if panel.runModal() == .OK, let url = panel.url {
             session.setWallpaper(url)
         }
@@ -969,7 +969,7 @@ private struct DesktopIcons: View {
             Button("열기") { session.activate(item) }
             Button("새 창으로 열기") { session.launch(session.app(for: item), newInstance: true) }
             Divider()
-            Button(session.isPinned(item) ? "독에서 제거" : "독에 고정") { session.togglePin(item) }
+            Button(session.isPinned(item) ? String(localized: "독에서 제거") : String(localized: "독에 고정")) { session.togglePin(item) }
             Button("바탕화면에서 제거") { session.removeDesktopItems([item]) }
         }
     }
@@ -1367,7 +1367,7 @@ private struct FloatingDock: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 6) {
-            item(key: "__drawer__", help: "앱 서랍") {
+            item(key: "__drawer__", help: String(localized: "앱 서랍")) {
                 recentsOpen = false
                 launcherOpen.toggle()
             } content: { size in
@@ -1390,11 +1390,11 @@ private struct FloatingDock: View {
                     IconImage(session: session, package: package, size: size)
                 }
                 .contextMenu {
-                    Button(session.isRunning(package) ? "보기" : "열기") { session.activate(package) }
+                    Button(session.isRunning(package) ? String(localized: "보기") : String(localized: "열기")) { session.activate(package) }
                     Button("새 창으로 열기") { session.launch(session.app(for: package), newInstance: true) }
                     Divider()
-                    Button(session.isPinned(package) ? "독에서 제거" : "독에 고정") { session.togglePin(package) }
-                    Button(session.isOnDesktop(package) ? "바탕화면에서 제거" : "바탕화면에 추가") {
+                    Button(session.isPinned(package) ? String(localized: "독에서 제거") : String(localized: "독에 고정")) { session.togglePin(package) }
+                    Button(session.isOnDesktop(package) ? String(localized: "바탕화면에서 제거") : String(localized: "바탕화면에 추가")) {
                         session.toggleDesktop(package)
                     }
                     if session.isRunning(package) {
@@ -1406,7 +1406,7 @@ private struct FloatingDock: View {
             if !session.minimized.isEmpty {
                 divider
                 ForEach(session.minimized) { entry in
-                    item(key: "min:\(entry.id)", help: "\(session.label(for: entry.package)) — 복원") {
+                    item(key: "min:\(entry.id)", help: String(localized: "\(session.label(for: entry.package)) — 복원")) {
                         session.restore(entry)
                     } content: { size in
                         RoundedRectangle(cornerRadius: size * 0.2)
@@ -1522,7 +1522,7 @@ private struct NavPill: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            NavButton(symbol: "chevron.backward", help: "뒤로") {
+            NavButton(symbol: "chevron.backward", help: String(localized: "뒤로")) {
                 // 앱 서랍·최근 창이 열려 있으면 그것부터 닫는다(안드로이드 뒤로가기와 같은 동작)
                 if launcherOpen || recentsOpen {
                     launcherOpen = false
@@ -1532,12 +1532,12 @@ private struct NavPill: View {
                 }
             }
             // 홈 = 떠 있는 창을 모두 최소화하고 바탕화면 보기(안드로이드 홈과 같은 뜻 — 앱 서랍은 독 맨 왼쪽)
-            NavButton(symbol: "circle", help: "홈 — 모든 창 최소화") {
+            NavButton(symbol: "circle", help: String(localized: "홈 — 모든 창 최소화")) {
                 launcherOpen = false
                 recentsOpen = false
                 session.minimizeAll()
             }
-            NavButton(symbol: "square.on.square", help: "최근 창") {
+            NavButton(symbol: "square.on.square", help: String(localized: "최근 창")) {
                 launcherOpen = false
                 recentsOpen.toggle()
             }
@@ -1641,10 +1641,10 @@ private struct AppDrawer: View {
                                             session.launch(app, restart: true)
                                         }
                                         Divider()
-                                        Button(session.isPinned(app.package) ? "독에서 제거" : "독에 고정") {
+                                        Button(session.isPinned(app.package) ? String(localized: "독에서 제거") : String(localized: "독에 고정")) {
                                             session.togglePin(app.package)
                                         }
-                                        Button(session.isOnDesktop(app.package) ? "바탕화면에서 제거" : "바탕화면에 추가") {
+                                        Button(session.isOnDesktop(app.package) ? String(localized: "바탕화면에서 제거") : String(localized: "바탕화면에 추가")) {
                                             session.toggleDesktop(app.package)
                                         }
                                     }

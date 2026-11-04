@@ -98,7 +98,7 @@ final class DesktopStream: @unchecked Sendable {
         // 2) 포워드: 로컬 임의 포트 → 기기 localabstract:scrcpy_<scid>
         let portText = try runADB(["-s", config.serial, "forward", "tcp:0", "localabstract:scrcpy_\(scid)"])
         guard let port = Int(portText.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            throw StreamError("adb forward 실패: \(portText)")
+            throw StreamError(String(localized: "adb forward 실패: \(portText)"))
         }
         lock.withLock { forwardPort = port }
         if isStopped { return }
@@ -123,7 +123,7 @@ final class DesktopStream: @unchecked Sendable {
             },
             onExit: { [weak self, weak process] _ in
                 let tail = process?.stderrTail.split(separator: "\n").suffix(2).joined(separator: " ") ?? ""
-                self?.finish(tail.isEmpty ? "데스크톱 서버가 종료되었습니다" : tail)
+                self?.finish(tail.isEmpty ? String(localized: "데스크톱 서버가 종료되었습니다") : tail)
             }
         )
         lock.withLock { server = process }
@@ -141,7 +141,7 @@ final class DesktopStream: @unchecked Sendable {
             close(socket)
             Thread.sleep(forTimeInterval: 0.1)
         }
-        guard video >= 0 else { throw StreamError("데스크톱 서버에 연결하지 못했습니다") }
+        guard video >= 0 else { throw StreamError(String(localized: "데스크톱 서버에 연결하지 못했습니다")) }
         let control = try connectLocal(port: port)
         var one: Int32 = 1
         setsockopt(control, IPPROTO_TCP, TCP_NODELAY, &one, socklen_t(MemoryLayout<Int32>.size))
@@ -157,9 +157,9 @@ final class DesktopStream: @unchecked Sendable {
         // 5) 기기 이름(64) → 코덱 id(4) → 세션 헤더(12)
         _ = try readExactly(video, 64)
         let codec = try readExactly(video, 4)
-        guard codec.be32(0) == 0x6832_3634 else { throw StreamError("지원하지 않는 코덱") }  // "h264"
+        guard codec.be32(0) == 0x6832_3634 else { throw StreamError(String(localized: "지원하지 않는 코덱")) }  // "h264"
         var header = try readExactly(video, 12)
-        guard header[0] & 0x80 != 0 else { throw StreamError("잘못된 스트림 헤더") }
+        guard header[0] & 0x80 != 0 else { throw StreamError(String(localized: "잘못된 스트림 헤더")) }
         updateSize(header)
 
         // 6) 패킷 루프
@@ -306,7 +306,7 @@ final class DesktopStream: @unchecked Sendable {
 
     private func connectLocal(port: Int) throws -> Int32 {
         let fd = socket(AF_INET, SOCK_STREAM, 0)
-        guard fd >= 0 else { throw StreamError("소켓 생성 실패") }
+        guard fd >= 0 else { throw StreamError(String(localized: "소켓 생성 실패")) }
         var addr = sockaddr_in()
         addr.sin_family = sa_family_t(AF_INET)
         addr.sin_port = in_port_t(UInt16(port).bigEndian)
@@ -318,7 +318,7 @@ final class DesktopStream: @unchecked Sendable {
         }
         guard result == 0 else {
             close(fd)
-            throw StreamError("로컬 포트 연결 실패")
+            throw StreamError(String(localized: "로컬 포트 연결 실패"))
         }
         var noSigPipe: Int32 = 1
         setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
@@ -330,7 +330,7 @@ final class DesktopStream: @unchecked Sendable {
         var offset = 0
         while offset < count {
             let n = buffer.withUnsafeMutableBytes { recv(socket, $0.baseAddress! + offset, count - offset, 0) }
-            guard n > 0 else { throw StreamError(isStopped ? "중지됨" : "기기와 연결이 끊어졌습니다") }
+            guard n > 0 else { throw StreamError(isStopped ? String(localized: "중지됨") : String(localized: "기기와 연결이 끊어졌습니다")) }
             offset += n
         }
         return buffer

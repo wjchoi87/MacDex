@@ -6,11 +6,17 @@ struct PairSheetView: View {
     @Environment(\.dismiss) private var dismiss
 
     enum Tab: String, CaseIterable, Identifiable {
-        case code = "페어링 코드"
-        case ip = "IP 직접 연결"
-        case mdns = "자동 발견"
+        case code, ip, mdns
 
         var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .code: String(localized: "페어링 코드")
+            case .ip: String(localized: "IP 직접 연결")
+            case .mdns: String(localized: "자동 발견")
+            }
+        }
     }
 
     @State private var tab: Tab = .code
@@ -26,7 +32,7 @@ struct PairSheetView: View {
 
             Picker("연결 방식", selection: $tab) {
                 ForEach(Tab.allCases) { t in
-                    Text(t.rawValue).tag(t)
+                    Text(t.title).tag(t)
                 }
             }
             .pickerStyle(.segmented)
@@ -261,7 +267,7 @@ struct PairSheetView: View {
 
     private func serviceTitle(_ service: LanDiscovery.Service) -> String {
         let name = matchingDevice(service)?.displayModel ?? service.displayName
-        return service.kind == .pairing ? "\(name) · 페어링 대기" : "\(name) · 무선 디버깅"
+        return service.kind == .pairing ? String(localized: "\(name) · 페어링 대기") : String(localized: "\(name) · 무선 디버깅")
     }
 
     /// 같은 폰이 이미 online인지(시리얼·주소·mDNS 자동연결 이름 기준).

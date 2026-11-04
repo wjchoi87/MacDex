@@ -265,7 +265,7 @@ enum ADB {
         let out = try await shell(serial: serial, "ip -f inet addr show wlan0")
         // "inet 192.168.1.10/24 brd ..." 파싱
         guard let range = out.range(of: #"inet\s+(\d+\.\d+\.\d+\.\d+)"#, options: .regularExpression) else {
-            throw ADBError.failure("Wi-Fi IP를 찾을 수 없습니다. 폰이 Wi-Fi에 연결되어 있는지 확인하세요.\n" + out)
+            throw ADBError.failure(String(localized: "Wi-Fi IP를 찾을 수 없습니다. 폰이 Wi-Fi에 연결되어 있는지 확인하세요.\n") + out)
         }
         let ip = out[range].split(separator: " ")[1].map(String.init)
         let host = "\(ip):5555"
@@ -277,7 +277,7 @@ enum ADB {
         try await Task.sleep(for: .seconds(2))
         let outcome = await connectVerified(host: host)
         guard outcome == .online else {
-            throw ADBError.failure("\(host) 연결 확인 실패(\(outcome)) — 폰과 맥이 같은 네트워크인지 확인하세요.")
+            throw ADBError.failure(String(localized: "\(host) 연결 확인 실패(\(outcome)) — 폰과 맥이 같은 네트워크인지 확인하세요."))
         }
         return host
     }
@@ -302,8 +302,8 @@ enum ADB {
             let isPairing = line.lowercased().contains("pairing")
             let key = (isPairing ? "P" : "C") + address
             guard seen.insert(key).inserted else { continue }  // 인터페이스 중복 제거
-            let name = (isPairing ? "페어링 대기중" : "무선 디버깅") + " (\(address))"
-            services.append(MdnsService(name: name, address: address))
+            let name = (isPairing ? String(localized: "페어링 대기중") : String(localized: "무선 디버깅")) + " (\(address))"
+            services.append(MdnsService(name: name, address: address, isPairing: isPairing))
         }
         return services
     }
@@ -321,7 +321,7 @@ enum ADB {
                 "cmd package resolve-activity --brief -c android.intent.category.LAUNCHER \(app.package) | tail -n 1"
             ).trimmingCharacters(in: .whitespacesAndNewlines)
             guard resolved.contains("/") else {
-                throw ADBError.failure("\(app.displayLabel): 실행할 수 있는 화면이 없는 앱입니다.")
+                throw ADBError.failure(String(localized: "\(app.displayLabel): 실행할 수 있는 화면이 없는 앱입니다."))
             }
             component = resolved
         }
@@ -692,12 +692,12 @@ enum ADB {
                     if data.isPNG { return data }
                 } catch {}
             }
-            throw ADBError.failure("디스플레이 \(displayId) 캡처 실패 (screencap -d)")
+            throw ADBError.failure(String(localized: "디스플레이 \(displayId) 캡처 실패 (screencap -d)"))
         }
         let data = try await ProcessRunner.runData(
             Binaries.adb, arguments: ["-s", serial, "exec-out", "screencap", "-p"], environment: env
         )
-        guard data.isPNG else { throw ADBError.failure("screencap 실패 — 기기가 잠겨 있거나 화면이 꺼져 있을 수 있음") }
+        guard data.isPNG else { throw ADBError.failure(String(localized: "screencap 실패 — 기기가 잠겨 있거나 화면이 꺼져 있을 수 있음")) }
         return data
     }
 

@@ -1,5 +1,7 @@
 # MacDroid — a native DeX for macOS
 
+**English** · [한국어](README.ko.md)
+
 Turn your Android phone into a desktop on your Mac: mirror the screen with ultra-low latency, or run individual Android apps in their own resizable Mac windows — Samsung DeX / Android DEX style, native and fast.
 
 Built on [scrcpy](https://github.com/Genymobile/scrcpy) (Apache-2.0) for the streaming core with Metal rendering and VideoToolbox hardware decoding, wrapped in a native SwiftUI/AppKit shell. No Electron. No cloud. Everything runs locally over USB or Wi-Fi.
@@ -7,12 +9,13 @@ Built on [scrcpy](https://github.com/Genymobile/scrcpy) (Apache-2.0) for the str
 ## Features
 
 - **Screen mirroring** — ultra-low-latency mirroring with hardware decoding (Metal + VideoToolbox), quality presets (Balanced / Crisp / Lightweight) and full manual control (codec, bitrate, resolution, fps)
-- **DeX mode** — launch Android apps in separate windows, each on its own **independent virtual display**; the phone screen stays untouched, and multiple apps run at the same time. Launching an app that is already running asks whether you want a separate new instance or to restart it
+- **App launcher** — every app on your phone with its real name and icon (read on the device in about 3 s); open any of them as a window on the DeX desktop, or as a new window / restart from the right-click menu
 - **DeX desktop** — MacDroid's own desktop shell in one Mac window: wallpaper, status bar (notifications, Wi-Fi/Bluetooth/battery pages, brightness/volume, calendar), a floating Mac-style dock, desktop icons and folders. Android apps open as windows inside it in ~0.1 s — all from a single video stream, cropped per window by MacDroid. Windows have Mac title bars (close/minimize/maximize/back), drag, resize and edge snapping. The phone's own screen and power state are never touched
 - **Physical keyboard & mouse** — uhid mode gives you hover, game keys, and your phone's IME (Korean/Japanese/…) exactly like a hardware keyboard
 - **Wireless** — pair with a 6-digit code, connect directly by IP, discover devices via mDNS, or switch a USB connection to Wi-Fi in one click
 - **File transfer** — send files to the phone's Download folder
 - **Menu bar quick mirror** — start mirroring right from the menu bar
+- **English / 한국어** — switch the app language in Settings → General
 - **Private by design** — no telemetry, no servers, no data collection. All traffic stays between your Mac and your phone (standard ADB over USB/Wi-Fi)
 
 ## Installation
@@ -22,7 +25,8 @@ Built on [scrcpy](https://github.com/Genymobile/scrcpy) (Apache-2.0) for the str
 - macOS 14.0 (Sonoma) or later
 - [Xcode](https://developer.apple.com/xcode/) 16 or later (a command-line build is enough)
 - [Homebrew](https://brew.sh)
-- Android SDK `platform-tools` (adb) and `build-tools` (aapt2) — easiest via [Android Studio](https://developer.android.com/studio) or `sdkmanager`
+- Android SDK `platform-tools` (adb), `build-tools` (aapt2, d8) and one `platforms/android-*` — easiest via [Android Studio](https://developer.android.com/studio) or `sdkmanager`
+- A JDK (`javac`) — used once to build the small on-device app indexer (`Helper/AppIndex`)
 - On the phone: **Developer options → USB debugging** (and **Wireless debugging** for Wi-Fi)
 
 ### Build from source
@@ -32,8 +36,8 @@ Built on [scrcpy](https://github.com/Genymobile/scrcpy) (Apache-2.0) for the str
 brew install scrcpy xcodegen
 
 # 2. Clone
-git clone https://github.com/wjchoi87/MacDex.git
-cd MacDex
+git clone https://github.com/wjchoi87/MacDroid.git
+cd MacDroid
 
 # 3. Generate the app icon and the Xcode project
 ./scripts/make-iconset.sh
@@ -47,7 +51,7 @@ xcodebuild -project MacDroid.xcodeproj -scheme MacDroid -configuration Release b
 open build/DerivedData/Build/Products/Release/MacDroid.app
 ```
 
-The build script (`scripts/fetch-vendor.sh`) bundles `adb`, `scrcpy` (with its dylib tree) and `aapt2` into the app, so the finished app has **no external dependencies** — end users never need Homebrew or the Android SDK to run it.
+The build scripts (`scripts/fetch-vendor.sh`, `scripts/build-helper.sh`) bundle `adb`, `scrcpy` (with its dylib tree), `aapt2` and the app indexer into the app, so the finished app has **no external dependencies** — end users never need Homebrew, a JDK or the Android SDK to run it.
 
 If your binaries live somewhere unusual, override them:
 
@@ -65,13 +69,13 @@ ADB_SRC=/path/to/adb AAPT2_SRC=/path/to/aapt2 SCRCPY_SRC=/path/to/scrcpy ./scrip
 ## Usage
 
 - **Mirror** — select the device, click *Screen mirroring*
-- **DeX windows** — open the app launcher and double-click any app; it opens in its own window on a virtual display (the phone screen is unaffected). Open as many apps as you like — each gets its own window, like using a desktop OS. Double-clicking a running app asks whether to open a separate new instance or restart it
+- **App launcher** — double-click an app to open it as a window on the DeX desktop (the desktop opens if needed). Opening an app that is already open brings its window to the front; right-click for *Open in new window* / *Restart*. Esc or ⌘W closes the launcher
 - **DeX desktop** — click *DeX desktop*. Open apps from the dock (left button = app drawer), desktop icons (double-click or Enter) or the app launcher; they open as windows inside the desktop. Drag a title bar to a screen edge to snap (halves, quarters, maximize). Home (bottom-left) minimizes every window; Esc or the mouse back button = Android back. Right-click the wallpaper for new folders / wallpaper, drag on the wallpaper to select several icons (Delete removes them). If the phone falls asleep the desktop pauses and offers a *Wake phone* button — MacDroid never wakes, sleeps or turns off the phone screen on its own
 - **Go wireless** — with a USB device selected, click *Switch to wireless*, then unplug the cable
 - **One-click recovery** — *Repair connection* (pair sheet & empty state) restarts the adb server only if it is stuck, reconnects wireless devices you've used before, retries discovery and refreshes the list. If nothing shows up, it tells you what to check on the phone and on the Mac. Device tracking also self-heals if the adb server dies, and the pair sheet has a close button (Esc works too)
 - **Reliable wireless connect** — a connection only counts as connected once the device actually reports `device` state; stale `offline` transports are cleaned up before and after every attempt, so a failed try never poisons the next one
 - **Auto-discovery & Local Network permission** — MacDroid browses Bonjour itself (`_adb-tls-connect` / `_adb-tls-pairing`), so discovery does not depend on whoever started the adb server. macOS blocks LAN access for an adb server started by a process without Local Network permission (e.g. a terminal): when MacDroid can reach a LAN device but the adb server can't, MacDroid restarts the server under its own permission and retries once. If MacDroid itself is blocked, enable it in System Settings → Privacy & Security → Local Network
-- **Settings** — quality presets, codec/bitrate/resolution/fps, audio, virtual display resolution & DPI, uhid advanced input. Capture fps is unlimited by default; virtual displays are capped at 60 Hz by the device itself, and smoothness at 1080p mostly depends on bitrate (default 20 Mbps)
+- **Settings** — app language (System / English / 한국어, applied after a restart), quality presets, codec/bitrate/resolution/fps, audio, virtual display resolution & DPI, uhid advanced input. Capture fps is unlimited by default; virtual displays are capped at 60 Hz by the device itself, and smoothness at 1080p mostly depends on bitrate (default 20 Mbps)
 - Shortcuts inside mirroring windows are scrcpy's own (`MOD+F` fullscreen, …) — see `scrcpy --help`
 - While a mirror/app-window session is running, the phone is kept from sleeping (`stay_on_while_plugged_in`); your previous setting is restored when the last session closes. The DeX desktop does not change any power setting
 
@@ -139,6 +143,10 @@ Notes:
 - **DeX windows (app launch / CLI)** — each window is a separate scrcpy instance with `--new-display` + `--start-app`, giving every app its own virtual display
 - **App icons & names** — an on-device indexer (`Helper/AppIndex`, run with `app_process`) returns every launcher app with its real label and rendered icon in one pass; falls back to `pm list` + APK + `aapt2`
 - **Device tracking** — `adb track-devices` with a proper length-prefixed frame parser
+
+## Support
+
+If MacDroid is useful to you, you can support its development through [GitHub Sponsors](https://github.com/sponsors/wjchoi87). Thank you!
 
 ## Third-party software
 

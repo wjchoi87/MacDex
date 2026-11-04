@@ -1,0 +1,4341 @@
+{
+  "sourceLanguage": "ko",
+  "strings": {
+    "%@\n%@\n더블클릭: 데스크톱에서 열기 · 우클릭: 새 창/다시 시작": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@\n%@\nDouble-click: open on the desktop · Right-click: new window/restart"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@\n%@\n더블클릭: 데스크톱에서 열기 · 우클릭: 새 창/다시 시작"
+          }
+        }
+      }
+    },
+    "%@ · 무선 디버깅": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · Wireless debugging"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · 무선 디버깅"
+          }
+        }
+      }
+    },
+    "%@ · 페어링 대기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · Waiting to pair"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · 페어링 대기"
+          }
+        }
+      }
+    },
+    "%@ — 복원": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ — Restore"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ — 복원"
+          }
+        }
+      }
+    },
+    "%@ — 페어링 포트가 닫혀 있습니다. 폰의 '기기 페어링' 창을 다시 열어 새 주소를 확인하세요.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ — The pairing port is closed. Reopen 'Pair device' on the phone and check the new address."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ — 페어링 포트가 닫혀 있습니다. 폰의 '기기 페어링' 창을 다시 열어 새 주소를 확인하세요."
+          }
+        }
+      }
+    },
+    "%@ — 포트가 닫혀 있습니다. 폰의 무선 디버깅 화면에 나온 현재 포트를 확인하세요(무선 디버깅을 다시 켤 때마다 바뀝니다).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ — The port is closed. Check the current port on the phone's Wireless debugging screen (it changes every time you turn Wireless debugging back on)."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ — 포트가 닫혀 있습니다. 폰의 무선 디버깅 화면에 나온 현재 포트를 확인하세요(무선 디버깅을 다시 켤 때마다 바뀝니다)."
+          }
+        }
+      }
+    },
+    "%@ — 폰 화면의 'USB 디버깅을 허용하시겠습니까?'에서 '허용'을 누르면 바로 연결됩니다.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ — Tap 'Allow' on the phone's 'Allow USB debugging?' prompt to connect right away."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ — 폰 화면의 'USB 디버깅을 허용하시겠습니까?'에서 '허용'을 누르면 바로 연결됩니다."
+          }
+        }
+      }
+    },
+    "%@ 무선 연결됨": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ connected wirelessly"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 무선 연결됨"
+          }
+        }
+      }
+    },
+    "%@ 미러링": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ mirroring"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 미러링"
+          }
+        }
+      }
+    },
+    "%@ 발견 — 무선으로 자동 연결 중…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Found %@ — connecting wirelessly…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 발견 — 무선으로 자동 연결 중…"
+          }
+        }
+      }
+    },
+    "%@ 실행 실패: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed to open %@: %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 실행 실패: %@"
+          }
+        }
+      }
+    },
+    "%@ 연결 시간 초과 — 주소·포트를 확인하세요. (VPN이면 폰의 VPN IP:5555, 무선 디버깅 포트는 같은 Wi-Fi에서만 닿습니다)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ connection timed out — check the address and port. (Over VPN use the phone's VPN IP:5555; the Wireless debugging port is only reachable on the same Wi-Fi)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 연결 시간 초과 — 주소·포트를 확인하세요. (VPN이면 폰의 VPN IP:5555, 무선 디버깅 포트는 같은 Wi-Fi에서만 닿습니다)"
+          }
+        }
+      }
+    },
+    "%@ 연결 실패: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed to connect to %@: %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 연결 실패: %@"
+          }
+        }
+      }
+    },
+    "%@ 연결 확인 실패(%@) — 폰과 맥이 같은 네트워크인지 확인하세요.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't verify the connection to %@ (%@) — make sure the phone and Mac are on the same network."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 연결 확인 실패(%@) — 폰과 맥이 같은 네트워크인지 확인하세요."
+          }
+        }
+      }
+    },
+    "%@ 연결됨": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ connected"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 연결됨"
+          }
+        }
+      }
+    },
+    "%@: 실행할 수 있는 화면이 없는 앱입니다.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: this app has no screen to open."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: 실행할 수 있는 화면이 없는 앱입니다."
+          }
+        }
+      }
+    },
+    "%@에 닿았지만 기기가 인증하지 않았습니다. 무선 디버깅 화면의 포트(5555가 아닌 포트)라면 먼저 '페어링 코드' 탭에서 이 맥을 페어링하세요.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reached %@, but the device didn't authorize. If this is the Wireless debugging port (not 5555), pair this Mac first in the 'Pairing code' tab."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@에 닿았지만 기기가 인증하지 않았습니다. 무선 디버깅 화면의 포트(5555가 아닌 포트)라면 먼저 '페어링 코드' 탭에서 이 맥을 페어링하세요."
+          }
+        }
+      }
+    },
+    "%@에 닿을 수 없습니다 — 폰과 맥이 같은 Wi-Fi인지 확인하세요.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't reach %@ — make sure the phone and Mac are on the same Wi-Fi."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@에 닿을 수 없습니다 — 폰과 맥이 같은 Wi-Fi인지 확인하세요."
+          }
+        }
+      }
+    },
+    "%@에 닿을 수 없습니다 — 폰과 맥이 같은 Wi-Fi인지, 폰 IP가 바뀌지 않았는지 확인하세요.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't reach %@ — make sure the phone and Mac are on the same Wi-Fi and the phone's IP hasn't changed."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@에 닿을 수 없습니다 — 폰과 맥이 같은 Wi-Fi인지, 폰 IP가 바뀌지 않았는지 확인하세요."
+          }
+        }
+      }
+    },
+    "%@이(가) %lld초 내에 응답하지 않았습니다": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ didn't respond within %lld seconds"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@이(가) %lld초 내에 응답하지 않았습니다"
+          }
+        }
+      }
+    },
+    "%@이(가) 같은 Wi-Fi에 있지만 이 맥과 아직 페어링되지 않았습니다 — '무선 기기 연결'을 누르고, 폰의 무선 디버깅 → '페어링 코드로 기기 페어링'을 열면 주소가 자동으로 채워집니다. 코드만 입력하세요(최초 1회).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is on the same Wi-Fi but not paired with this Mac yet — click 'Connect wireless device', then open Wireless debugging → 'Pair device with pairing code' on the phone; the address fills in automatically. Just enter the code (first time only)."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@이(가) 같은 Wi-Fi에 있지만 이 맥과 아직 페어링되지 않았습니다 — '무선 기기 연결'을 누르고, 폰의 무선 디버깅 → '페어링 코드로 기기 페어링'을 열면 주소가 자동으로 채워집니다. 코드만 입력하세요(최초 1회)."
+          }
+        }
+      }
+    },
+    "%lld": {
+      "shouldTranslate": false
+    },
+    "%lld Mbps": {
+      "shouldTranslate": false
+    },
+    "%lld%%": {
+      "shouldTranslate": false
+    },
+    "-": {
+      "shouldTranslate": false
+    },
+    "120": {
+      "shouldTranslate": false
+    },
+    "120fps": {
+      "shouldTranslate": false
+    },
+    "1280 × 720": {
+      "shouldTranslate": false
+    },
+    "1280px": {
+      "shouldTranslate": false
+    },
+    "1600 × 900": {
+      "shouldTranslate": false
+    },
+    "1920 × 1080 (DeX 표준)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1920 × 1080 (DeX standard)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1920 × 1080 (DeX 표준)"
+          }
+        }
+      }
+    },
+    "1920px": {
+      "shouldTranslate": false
+    },
+    "2560 × 1440": {
+      "shouldTranslate": false
+    },
+    "2560px": {
+      "shouldTranslate": false
+    },
+    "2M": {
+      "shouldTranslate": false
+    },
+    "30fps": {
+      "shouldTranslate": false
+    },
+    "480": {
+      "shouldTranslate": false
+    },
+    "50M": {
+      "shouldTranslate": false
+    },
+    "60fps": {
+      "shouldTranslate": false
+    },
+    "6자리": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "6 digits"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "6자리"
+          }
+        }
+      }
+    },
+    "AV1 (최신)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AV1 (newest)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AV1 (최신)"
+          }
+        }
+      }
+    },
+    "Android %@": {
+      "shouldTranslate": false
+    },
+    "DPI": {
+      "shouldTranslate": false
+    },
+    "DeX": {
+      "shouldTranslate": false
+    },
+    "DeX 가상 디스플레이": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DeX virtual display"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DeX 가상 디스플레이"
+          }
+        }
+      }
+    },
+    "DeX 데스크톱": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DeX Desktop"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DeX 데스크톱"
+          }
+        }
+      }
+    },
+    "DeX 앱 런처": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DeX App Launcher"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DeX 앱 런처"
+          }
+        }
+      }
+    },
+    "H.264 (호환성)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "H.264 (compatibility)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "H.264 (호환성)"
+          }
+        }
+      }
+    },
+    "H.264 · 20 Mbps · 최대 1920px": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "H.264 · 20 Mbps · up to 1920px"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "H.264 · 20 Mbps · 최대 1920px"
+          }
+        }
+      }
+    },
+    "H.264 · 4 Mbps · 최대 1280px · 60fps 제한": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "H.264 · 4 Mbps · up to 1280px · 60fps cap"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "H.264 · 4 Mbps · 최대 1280px · 60fps 제한"
+          }
+        }
+      }
+    },
+    "H.265 (효율)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "H.265 (efficiency)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "H.265 (효율)"
+          }
+        }
+      }
+    },
+    "H.265 · 30 Mbps · 최대 2560px": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "H.265 · 30 Mbps · up to 2560px"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "H.265 · 30 Mbps · 최대 2560px"
+          }
+        }
+      }
+    },
+    "IP 직접 연결": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect by IP"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IP 직접 연결"
+          }
+        }
+      }
+    },
+    "LICENSES/NOTICE.md를 불러올 수 없습니다.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't load LICENSES/NOTICE.md."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LICENSES/NOTICE.md를 불러올 수 없습니다."
+          }
+        }
+      }
+    },
+    "MacDroid": {
+      "shouldTranslate": false
+    },
+    "MacDroid · %@ 미러링": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacDroid · %@ mirroring"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacDroid · %@ 미러링"
+          }
+        }
+      }
+    },
+    "MacDroid 데스크톱 · %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacDroid Desktop · %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacDroid 데스크톱 · %@"
+          }
+        }
+      }
+    },
+    "MacDroid 데스크톱 — 앱을 창으로, 독·상태표시줄·바탕화면 아이콘": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacDroid desktop — apps as windows, dock, status bar, desktop icons"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacDroid 데스크톱 — 앱을 창으로, 독·상태표시줄·바탕화면 아이콘"
+          }
+        }
+      }
+    },
+    "MacDroid 데스크톱 창 열기 — 앱은 그 안에서 창으로 열립니다": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the MacDroid desktop — apps open as windows inside it"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacDroid 데스크톱 창 열기 — 앱은 그 안에서 창으로 열립니다"
+          }
+        }
+      }
+    },
+    "MacDroid 데스크톱을 엽니다 — 앱은 그 안에서 창으로 열리고, 독 고정·바탕화면 아이콘을 쓸 수 있습니다": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens the MacDroid desktop — apps open as windows inside it, with a dock and desktop icons"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacDroid 데스크톱을 엽니다 — 앱은 그 안에서 창으로 열리고, 독 고정·바탕화면 아이콘을 쓸 수 있습니다"
+          }
+        }
+      }
+    },
+    "MacDroid 설정…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacDroid Settings…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacDroid 설정…"
+          }
+        }
+      }
+    },
+    "MacDroid 열기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open MacDroid"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacDroid 열기"
+          }
+        }
+      }
+    },
+    "MacDroid 종료": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit MacDroid"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacDroid 종료"
+          }
+        }
+      }
+    },
+    "MacDroid는 Android Debug Bridge로 통신합니다.\n아래 3단계면 준비 끝입니다.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacDroid talks to your phone through Android Debug Bridge.\nThree steps and you're ready."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacDroid는 Android Debug Bridge로 통신합니다.\n아래 3단계면 준비 끝입니다."
+          }
+        }
+      }
+    },
+    "MacDroid의 로컬 네트워크 접근이 꺼져 있습니다 — 시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 MacDroid를 켜세요.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacDroid's Local Network access is off — turn on MacDroid in System Settings → Privacy & Security → Local Network."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacDroid의 로컬 네트워크 접근이 꺼져 있습니다 — 시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 MacDroid를 켜세요."
+          }
+        }
+      }
+    },
+    "MacDroid의 로컬 네트워크 접근이 꺼져 있어 같은 Wi-Fi의 폰을 찾을 수 없습니다.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacDroid's Local Network access is off, so phones on the same Wi-Fi can't be found."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacDroid의 로컬 네트워크 접근이 꺼져 있어 같은 Wi-Fi의 폰을 찾을 수 없습니다."
+          }
+        }
+      }
+    },
+    "MacDroid의 로컬 네트워크 접근이 차단되어 있습니다.\n같은 Wi-Fi의 기기를 찾을 수 없습니다.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacDroid's Local Network access is blocked.\nDevices on the same Wi-Fi can't be found."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MacDroid의 로컬 네트워크 접근이 차단되어 있습니다.\n같은 Wi-Fi의 기기를 찾을 수 없습니다."
+          }
+        }
+      }
+    },
+    "USB 디버깅 허용": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow USB debugging"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "USB 디버깅 허용"
+          }
+        }
+      }
+    },
+    "USB 연결 · 폰 Wi-Fi 설정 열기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "USB connection · Open phone Wi-Fi settings"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "USB 연결 · 폰 Wi-Fi 설정 열기"
+          }
+        }
+      }
+    },
+    "USB 케이블 연결": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect a USB cable"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "USB 케이블 연결"
+          }
+        }
+      }
+    },
+    "USB 케이블로 연결하거나, 무선 디버깅으로 페어링하면\n폰 화면과 앱을 맥 윈도우에서 쓸 수 있습니다.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect with a USB cable or pair over Wireless debugging\nto use your phone's screen and apps in Mac windows."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "USB 케이블로 연결하거나, 무선 디버깅으로 페어링하면\n폰 화면과 앱을 맥 윈도우에서 쓸 수 있습니다."
+          }
+        }
+      }
+    },
+    "Wi-Fi IP를 찾을 수 없습니다. 폰이 Wi-Fi에 연결되어 있는지 확인하세요.\n": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't find the Wi-Fi IP. Make sure the phone is connected to Wi-Fi.\n"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wi-Fi IP를 찾을 수 없습니다. 폰이 Wi-Fi에 연결되어 있는지 확인하세요.\n"
+          }
+        }
+      }
+    },
+    "Wi-Fi 페어링/연결, 같은 네트워크 자동 발견": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wi-Fi pairing/connect, automatic discovery on the same network"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wi-Fi 페어링/연결, 같은 네트워크 자동 발견"
+          }
+        }
+      }
+    },
+    "adb forward 실패: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "adb forward failed: %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "adb forward 실패: %@"
+          }
+        }
+      }
+    },
+    "adb 서버가 로컬 네트워크에 닿지 못해 MacDroid 권한으로 재시작합니다… (다른 adb 도구의 연결이 잠시 끊깁니다)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The adb server can't reach the local network — restarting it with MacDroid's permission… (other adb tools will briefly disconnect)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "adb 서버가 로컬 네트워크에 닿지 못해 MacDroid 권한으로 재시작합니다… (다른 adb 도구의 연결이 잠시 끊깁니다)"
+          }
+        }
+      }
+    },
+    "adb 서버를 MacDroid 권한으로 재시작했지만 %@에 여전히 닿지 않습니다. 시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 MacDroid가 켜져 있는지 확인하세요.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restarted the adb server with MacDroid's permission, but %@ is still unreachable. Check that MacDroid is on in System Settings → Privacy & Security → Local Network."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "adb 서버를 MacDroid 권한으로 재시작했지만 %@에 여전히 닿지 않습니다. 시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 MacDroid가 켜져 있는지 확인하세요."
+          }
+        }
+      }
+    },
+    "adb 재시작, 연결했던 무선 기기 재접속, 주변 기기 재검색을 한 번에 실행합니다. 연결이 안 될 때 눌러보세요.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restarts adb, reconnects wireless devices you've used, and searches for nearby devices in one go. Try it when nothing connects."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "adb 재시작, 연결했던 무선 기기 재접속, 주변 기기 재검색을 한 번에 실행합니다. 연결이 안 될 때 눌러보세요."
+          }
+        }
+      }
+    },
+    "screencap 실패 — 기기가 잠겨 있거나 화면이 꺼져 있을 수 있음": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "screencap failed — the device may be locked or its screen off"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "screencap 실패 — 기기가 잠겨 있거나 화면이 꺼져 있을 수 있음"
+          }
+        }
+      }
+    },
+    "가볍게": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lightweight"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "가볍게"
+          }
+        }
+      }
+    },
+    "같은 Wi-Fi에서 %@ 발견": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Found %@ on the same Wi-Fi"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "같은 Wi-Fi에서 %@ 발견"
+          }
+        }
+      }
+    },
+    "같은 Wi-Fi에서 발견된 기기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Devices found on the same Wi-Fi"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "같은 Wi-Fi에서 발견된 기기"
+          }
+        }
+      }
+    },
+    "개발자 옵션 켜기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn on Developer options"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "개발자 옵션 켜기"
+          }
+        }
+      }
+    },
+    "검색 결과 없음": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No results"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "검색 결과 없음"
+          }
+        }
+      }
+    },
+    "계산 중…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calculating…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "계산 중…"
+          }
+        }
+      }
+    },
+    "고급 입력 (uhid 물리 키보드·마우스)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Advanced input (uhid physical keyboard & mouse)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "고급 입력 (uhid 물리 키보드·마우스)"
+          }
+        }
+      }
+    },
+    "고급 입력을 켜면 폰에 가상 키보드/마우스가 연결되어 호버·게임 키·한글 IME가 물리키보드처럼 동작합니다. 일부 앱에서 문제가 있으면 끄세요.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With advanced input, a virtual keyboard/mouse is attached to the phone so hover, game keys and the Korean IME work like a physical keyboard. Turn it off if some apps misbehave."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "고급 입력을 켜면 폰에 가상 키보드/마우스가 연결되어 호버·게임 키·한글 IME가 물리키보드처럼 동작합니다. 일부 앱에서 문제가 있으면 끄세요."
+          }
+        }
+      }
+    },
+    "권한을 허용한 뒤 다시 검색": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search again after allowing"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "권한을 허용한 뒤 다시 검색"
+          }
+        }
+      }
+    },
+    "균형": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Balanced"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "균형"
+          }
+        }
+      }
+    },
+    "기기 감시 시작 실패: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed to start device monitoring: %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기기 감시 시작 실패: %@"
+          }
+        }
+      }
+    },
+    "기기 무선 연결…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect Device Wirelessly…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기기 무선 연결…"
+          }
+        }
+      }
+    },
+    "기기 없음": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No device"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기기 없음"
+          }
+        }
+      }
+    },
+    "기기 연결 대기 중…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for a device…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기기 연결 대기 중…"
+          }
+        }
+      }
+    },
+    "기기 연결됨! 잠시 후 자동으로 닫힙니다": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device connected! Closing shortly"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기기 연결됨! 잠시 후 자동으로 닫힙니다"
+          }
+        }
+      }
+    },
+    "기기 연결을 확인한 뒤 다시 시도하세요.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check the device connection and try again."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기기 연결을 확인한 뒤 다시 시도하세요."
+          }
+        }
+      }
+    },
+    "기기 정보 새로고침": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh device info"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기기 정보 새로고침"
+          }
+        }
+      }
+    },
+    "기기가 온라인이 아닙니다.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The device is not online."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기기가 온라인이 아닙니다."
+          }
+        }
+      }
+    },
+    "기기를 연결하세요": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect a device"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기기를 연결하세요"
+          }
+        }
+      }
+    },
+    "기기와 연결이 끊어졌습니다": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lost connection to the device"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기기와 연결이 끊어졌습니다"
+          }
+        }
+      }
+    },
+    "기본 배경화면으로": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default wallpaper"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기본 배경화면으로"
+          }
+        }
+      }
+    },
+    "깨어있기 유지": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep awake"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "깨어있기 유지"
+          }
+        }
+      }
+    },
+    "깨어있기 유지 (USB)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep awake (USB)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "깨어있기 유지 (USB)"
+          }
+        }
+      }
+    },
+    "낮은 DPI = 큰 레이아웃(태블릿/데스크톱 느낌), 높은 DPI = 폰 레이아웃.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lower DPI = larger layout (tablet/desktop feel), higher DPI = phone layout."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "낮은 DPI = 큰 레이아웃(태블릿/데스크톱 느낌), 높은 DPI = 폰 레이아웃."
+          }
+        }
+      }
+    },
+    "다시 보지 않기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Don't show again"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다시 보지 않기"
+          }
+        }
+      }
+    },
+    "다시 시도": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다시 시도"
+          }
+        }
+      }
+    },
+    "다시 시작": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다시 시작"
+          }
+        }
+      }
+    },
+    "다시 시작하면 적용됩니다": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Takes effect after restarting"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다시 시작하면 적용됩니다"
+          }
+        }
+      }
+    },
+    "다시 연결": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconnect"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다시 연결"
+          }
+        }
+      }
+    },
+    "다시 찾기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search again"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다시 찾기"
+          }
+        }
+      }
+    },
+    "다음 달": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next month"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다음 달"
+          }
+        }
+      }
+    },
+    "닫기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "닫기"
+          }
+        }
+      }
+    },
+    "달력": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calendar"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "달력"
+          }
+        }
+      }
+    },
+    "데스크톱 서버가 종료되었습니다": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The desktop server stopped"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "데스크톱 서버가 종료되었습니다"
+          }
+        }
+      }
+    },
+    "데스크톱 서버에 연결하지 못했습니다": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't connect to the desktop server"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "데스크톱 서버에 연결하지 못했습니다"
+          }
+        }
+      }
+    },
+    "데스크톱 연결이 끊어졌습니다": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desktop connection lost"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "데스크톱 연결이 끊어졌습니다"
+          }
+        }
+      }
+    },
+    "데스크톱 열기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Desktop"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "데스크톱 열기"
+          }
+        }
+      }
+    },
+    "데스크톱 준비 중…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparing desktop…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "데스크톱 준비 중…"
+          }
+        }
+      }
+    },
+    "독에 고정": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep in Dock"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "독에 고정"
+          }
+        }
+      }
+    },
+    "독에서 제거": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove from Dock"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "독에서 제거"
+          }
+        }
+      }
+    },
+    "동작": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Behavior"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "동작"
+          }
+        }
+      }
+    },
+    "뒤로": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "뒤로"
+          }
+        }
+      }
+    },
+    "디스플레이 %lld 캡처 실패 (screencap -d)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed to capture display %lld (screencap -d)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "디스플레이 %lld 캡처 실패 (screencap -d)"
+          }
+        }
+      }
+    },
+    "로컬 포트 연결 실패": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed to connect to the local port"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "로컬 포트 연결 실패"
+          }
+        }
+      }
+    },
+    "모든 창 닫기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close all windows"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모든 창 닫기"
+          }
+        }
+      }
+    },
+    "모든 통신은 로컬(USB/Wi-Fi) — 서버 없음": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All traffic stays local (USB/Wi-Fi) — no servers"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모든 통신은 로컬(USB/Wi-Fi) — 서버 없음"
+          }
+        }
+      }
+    },
+    "무선": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wireless"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "무선"
+          }
+        }
+      }
+    },
+    "무선 기기 다시 연결됨: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wireless device reconnected: %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "무선 기기 다시 연결됨: %@"
+          }
+        }
+      }
+    },
+    "무선 기기 연결": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect wireless device"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "무선 기기 연결"
+          }
+        }
+      }
+    },
+    "무선 디버깅": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wireless debugging"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "무선 디버깅"
+          }
+        }
+      }
+    },
+    "무선 디버깅 화면에서 '기기 페어링'을 열면 나오는 주소와 6자리 코드를 입력하세요. 폰과 맥이 같은 Wi-Fi에 있어야 합니다.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open 'Pair device' on the Wireless debugging screen and enter the address and 6-digit code shown there. The phone and Mac must be on the same Wi-Fi."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "무선 디버깅 화면에서 '기기 페어링'을 열면 나오는 주소와 6자리 코드를 입력하세요. 폰과 맥이 같은 Wi-Fi에 있어야 합니다."
+          }
+        }
+      }
+    },
+    "무선 디버깅 화면의 IP 주소와 포트(예: 192.168.0.10:39523) 또는 이미 페어링된 기기의 5555 포트로 연결합니다.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect using the IP address and port from the Wireless debugging screen (e.g. 192.168.0.10:39523), or port 5555 of an already paired device."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "무선 디버깅 화면의 IP 주소와 포트(예: 192.168.0.10:39523) 또는 이미 페어링된 기기의 5555 포트로 연결합니다."
+          }
+        }
+      }
+    },
+    "무선 모드로 전환 중… (몇 초 걸림)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switching to wireless… (takes a few seconds)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "무선 모드로 전환 중… (몇 초 걸림)"
+          }
+        }
+      }
+    },
+    "무선 연결 완료: %@ — USB 케이블을 뽑아도 됩니다": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected wirelessly: %@ — you can unplug the USB cable"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "무선 연결 완료: %@ — USB 케이블을 뽑아도 됩니다"
+          }
+        }
+      }
+    },
+    "무선 전환 실패: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switching to wireless failed: %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "무선 전환 실패: %@"
+          }
+        }
+      }
+    },
+    "무선으로 연결": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect wirelessly"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "무선으로 연결"
+          }
+        }
+      }
+    },
+    "무선으로 연결하기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect wirelessly"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "무선으로 연결하기"
+          }
+        }
+      }
+    },
+    "무선으로 전환": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch to wireless"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "무선으로 전환"
+          }
+        }
+      }
+    },
+    "물리 키보드·마우스·호버·한글 입력": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Physical keyboard, mouse, hover, Korean input"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "물리 키보드·마우스·호버·한글 입력"
+          }
+        }
+      }
+    },
+    "미디어 볼륨": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Media volume"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "미디어 볼륨"
+          }
+        }
+      }
+    },
+    "미러링": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mirroring"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "미러링"
+          }
+        }
+      }
+    },
+    "미러링 시작 실패: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed to start mirroring: %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "미러링 시작 실패: %@"
+          }
+        }
+      }
+    },
+    "미러링 중 화면 끄기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn off phone screen while mirroring"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "미러링 중 화면 끄기"
+          }
+        }
+      }
+    },
+    "밀도 (DPI)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Density (DPI)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "밀도 (DPI)"
+          }
+        }
+      }
+    },
+    "바탕화면에 추가": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add to Desktop"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "바탕화면에 추가"
+          }
+        }
+      }
+    },
+    "바탕화면에서 제거": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove from Desktop"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "바탕화면에서 제거"
+          }
+        }
+      }
+    },
+    "밝기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brightness"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "밝기"
+          }
+        }
+      }
+    },
+    "배경화면 변경…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change wallpaper…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "배경화면 변경…"
+          }
+        }
+      }
+    },
+    "배경화면으로 사용": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use as wallpaper"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "배경화면으로 사용"
+          }
+        }
+      }
+    },
+    "배터리 설정 열기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open battery settings"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "배터리 설정 열기"
+          }
+        }
+      }
+    },
+    "버전 %@ · 맥에서 쓰는 안드로이드 데스크톱": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version %@ · An Android desktop on your Mac"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "버전 %@ · 맥에서 쓰는 안드로이드 데스크톱"
+          }
+        }
+      }
+    },
+    "보기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보기"
+          }
+        }
+      }
+    },
+    "복구 완료 — %@ 연결됨": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recovered — %@ connected"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복구 완료 — %@ 연결됨"
+          }
+        }
+      }
+    },
+    "복구 완료 — USB 기기가 인식되었습니다": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recovered — USB device detected"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복구 완료 — USB 기기가 인식되었습니다"
+          }
+        }
+      }
+    },
+    "복구 후에도 기기가 보이지 않습니다 — ① 폰 USB 알림 → '파일 전송' 모드 ② 폰 개발자 옵션 → 무선 디버깅 켜기 ③ 맥과 같은 Wi-Fi인지 ④ 맥: 시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 MacDroid 켜기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Still no device after recovery — ① phone USB notification → 'File transfer' mode ② phone Developer options → turn on Wireless debugging ③ same Wi-Fi as the Mac? ④ Mac: System Settings → Privacy & Security → Local Network → turn on MacDroid"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복구 후에도 기기가 보이지 않습니다 — ① 폰 USB 알림 → '파일 전송' 모드 ② 폰 개발자 옵션 → 무선 디버깅 켜기 ③ 맥과 같은 Wi-Fi인지 ④ 맥: 시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 MacDroid 켜기"
+          }
+        }
+      }
+    },
+    "불러오는 중…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "불러오는 중…"
+          }
+        }
+      }
+    },
+    "블루투스 꺼짐 · 블루투스 설정 열기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth off · Open Bluetooth settings"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "블루투스 꺼짐 · 블루투스 설정 열기"
+          }
+        }
+      }
+    },
+    "블루투스 설정 열기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Bluetooth settings"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "블루투스 설정 열기"
+          }
+        }
+      }
+    },
+    "비디오 코덱": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video codec"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "비디오 코덱"
+          }
+        }
+      }
+    },
+    "비트레이트": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitrate"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "비트레이트"
+          }
+        }
+      }
+    },
+    "사용자 지정 — 프리셋과 다른 값이 설정되어 있습니다": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom — values differ from the preset"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "사용자 지정 — 프리셋과 다른 값이 설정되어 있습니다"
+          }
+        }
+      }
+    },
+    "새 창으로 열기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in new window"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "새 창으로 열기"
+          }
+        }
+      }
+    },
+    "새 폴더": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Folder"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "새 폴더"
+          }
+        }
+      }
+    },
+    "새 폴더 %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Folder %lld"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "새 폴더 %lld"
+          }
+        }
+      }
+    },
+    "새로고침": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "새로고침"
+          }
+        }
+      }
+    },
+    "선명": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crisp"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선명"
+          }
+        }
+      }
+    },
+    "선택 항목으로 새 폴더": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Folder with Selection"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택 항목으로 새 폴더"
+          }
+        }
+      }
+    },
+    "선택한 %lld개 바탕화면에서 제거": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove %lld selected from Desktop"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택한 %lld개 바탕화면에서 제거"
+          }
+        }
+      }
+    },
+    "선택한 %lld개 열기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open %lld selected"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택한 %lld개 열기"
+          }
+        }
+      }
+    },
+    "설정": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설정"
+          }
+        }
+      }
+    },
+    "설정 → 개발자 옵션 → USB 디버깅을 켭니다. (무선 디버깅도 같이 켜두면 편합니다)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings → Developer options → turn on USB debugging. (Turning on Wireless debugging too is handy)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설정 → 개발자 옵션 → USB 디버깅을 켭니다. (무선 디버깅도 같이 켜두면 편합니다)"
+          }
+        }
+      }
+    },
+    "설정 → 휴대전화 정보 → 소프트웨어 정보 → 빌드 번호를 7번 누릅니다.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings → About phone → Software information → tap Build number 7 times."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설정 → 휴대전화 정보 → 소프트웨어 정보 → 빌드 번호를 7번 누릅니다."
+          }
+        }
+      }
+    },
+    "설정…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설정…"
+          }
+        }
+      }
+    },
+    "소리": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sound"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "소리"
+          }
+        }
+      }
+    },
+    "소리는 폰 스피커로 나옵니다": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sound plays from the phone speaker"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "소리는 폰 스피커로 나옵니다"
+          }
+        }
+      }
+    },
+    "소켓 생성 실패": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed to create socket"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "소켓 생성 실패"
+          }
+        }
+      }
+    },
+    "승인 필요": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs approval"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "승인 필요"
+          }
+        }
+      }
+    },
+    "시리얼": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serial"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "시리얼"
+          }
+        }
+      }
+    },
+    "시스템 설정 따르기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use system setting"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "시스템 설정 따르기"
+          }
+        }
+      }
+    },
+    "시스템 설정에서 허용하기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow in System Settings"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "시스템 설정에서 허용하기"
+          }
+        }
+      }
+    },
+    "실행 중인 창": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open windows"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "실행 중인 창"
+          }
+        }
+      }
+    },
+    "아이콘 정렬": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrange Icons"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "아이콘 정렬"
+          }
+        }
+      }
+    },
+    "알림": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notifications"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "알림"
+          }
+        }
+      }
+    },
+    "알림 닫기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dismiss notification"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "알림 닫기"
+          }
+        }
+      }
+    },
+    "알림이 없습니다": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No notifications"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "알림이 없습니다"
+          }
+        }
+      }
+    },
+    "앱 검색": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search apps"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 검색"
+          }
+        }
+      }
+    },
+    "앱 런처 · %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App Launcher · %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 런처 · %@"
+          }
+        }
+      }
+    },
+    "앱 목록 불러오는 중…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading apps…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 목록 불러오는 중…"
+          }
+        }
+      }
+    },
+    "앱 목록을 가져오지 못했습니다": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't load the app list"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 목록을 가져오지 못했습니다"
+          }
+        }
+      }
+    },
+    "앱 서랍": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App drawer"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 서랍"
+          }
+        }
+      }
+    },
+    "앱 서랍 열기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open App Drawer"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 서랍 열기"
+          }
+        }
+      }
+    },
+    "앱 아이콘 캐시": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App icon cache"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 아이콘 캐시"
+          }
+        }
+      }
+    },
+    "앱 아이콘/라벨 캐시입니다. 지워도 다음 실행 시 다시 만들어집니다.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cache of app icons/labels. It's rebuilt on the next launch if you clear it."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 아이콘/라벨 캐시입니다. 지워도 다음 실행 시 다시 만들어집니다."
+          }
+        }
+      }
+    },
+    "앱 아이콘을 바탕화면의 이 폴더 위로 끌어다 놓으세요": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drag app icons onto this folder on the desktop"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 아이콘을 바탕화면의 이 폴더 위로 끌어다 놓으세요"
+          }
+        }
+      }
+    },
+    "앱 언어": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App language"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 언어"
+          }
+        }
+      }
+    },
+    "앱 창 (%@)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App window (%@)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 창 (%@)"
+          }
+        }
+      }
+    },
+    "앱 창은 각자 독립된 가상 디스플레이에서 실행됩니다. 폰 화면은 그대로 유지됩니다.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Each app window runs on its own virtual display. The phone screen stays as it is."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "앱 창은 각자 독립된 가상 디스플레이에서 실행됩니다. 폰 화면은 그대로 유지됩니다."
+          }
+        }
+      }
+    },
+    "언어": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Language"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "언어"
+          }
+        }
+      }
+    },
+    "연결": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connections"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결"
+          }
+        }
+      }
+    },
+    "연결 가이드": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection guide"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결 가이드"
+          }
+        }
+      }
+    },
+    "연결 방식": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection method"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결 방식"
+          }
+        }
+      }
+    },
+    "연결 복구": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repair connection"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결 복구"
+          }
+        }
+      }
+    },
+    "연결 복구 중… (몇 초 걸림)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repairing connection… (takes a few seconds)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결 복구 중… (몇 초 걸림)"
+          }
+        }
+      }
+    },
+    "연결 중… %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connecting… %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결 중… %@"
+          }
+        }
+      }
+    },
+    "연결된 기기 없음": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No connected devices"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결된 기기 없음"
+          }
+        }
+      }
+    },
+    "연결된 기기를 선택하세요.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a connected device."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결된 기기를 선택하세요."
+          }
+        }
+      }
+    },
+    "연결됨": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결됨"
+          }
+        }
+      }
+    },
+    "열기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "열기"
+          }
+        }
+      }
+    },
+    "열린 창이 없습니다": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No open windows"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "열린 창이 없습니다"
+          }
+        }
+      }
+    },
+    "예: 192.168.0.10:37001": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e.g. 192.168.0.10:37001"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "예: 192.168.0.10:37001"
+          }
+        }
+      }
+    },
+    "예: 192.168.0.10:5555": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e.g. 192.168.0.10:5555"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "예: 192.168.0.10:5555"
+          }
+        }
+      }
+    },
+    "오늘": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오늘"
+          }
+        }
+      }
+    },
+    "오디오 전송": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audio forwarding"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오디오 전송"
+          }
+        }
+      }
+    },
+    "오프라인": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오프라인"
+          }
+        }
+      }
+    },
+    "오픈소스 고지": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open source notices"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오픈소스 고지"
+          }
+        }
+      }
+    },
+    "완료": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "완료"
+          }
+        }
+      }
+    },
+    "원본": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Native"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "원본"
+          }
+        }
+      }
+    },
+    "음소거": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mute"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "음소거"
+          }
+        }
+      }
+    },
+    "이 컴퓨터의 디버깅을 허용하시겠습니까? 알림이 뜨면 '허용'을 누르세요. 알림이 안 보이면 USB 케이블을 다시 연결해보세요.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "'Allow USB debugging from this computer?' — tap 'Allow' when it appears. If you don't see it, reconnect the USB cable."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 컴퓨터의 디버깅을 허용하시겠습니까? 알림이 뜨면 '허용'을 누르세요. 알림이 안 보이면 USB 케이블을 다시 연결해보세요."
+          }
+        }
+      }
+    },
+    "이전 달": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous month"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이전 달"
+          }
+        }
+      }
+    },
+    "이전 실행의 창 %lld개를 다시 관리합니다 (닫기로 종료 가능)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Managing %lld windows from the previous run again (close them to quit)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이전 실행의 창 %lld개를 다시 관리합니다 (닫기로 종료 가능)"
+          }
+        }
+      }
+    },
+    "인식 안 됨": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not recognized"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "인식 안 됨"
+          }
+        }
+      }
+    },
+    "일반": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "General"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "일반"
+          }
+        }
+      }
+    },
+    "입력": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Input"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "입력"
+          }
+        }
+      }
+    },
+    "자동 발견": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto discovery"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "자동 발견"
+          }
+        }
+      }
+    },
+    "자동 밝기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-brightness"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "자동 밝기"
+          }
+        }
+      }
+    },
+    "잘못된 스트림 헤더": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid stream header"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "잘못된 스트림 헤더"
+          }
+        }
+      }
+    },
+    "전송 실패: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transfer failed: %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전송 실패: %@"
+          }
+        }
+      }
+    },
+    "전송 완료: 폰의 Download 폴더에 저장됨": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent: saved to the phone's Download folder"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전송 완료: 폰의 Download 폴더에 저장됨"
+          }
+        }
+      }
+    },
+    "정보": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "정보"
+          }
+        }
+      }
+    },
+    "제조사": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manufacturer"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "제조사"
+          }
+        }
+      }
+    },
+    "제한 없음": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlimited"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "제한 없음"
+          }
+        }
+      }
+    },
+    "주소": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Address"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "주소"
+          }
+        }
+      }
+    },
+    "주소와 페어링 코드를 입력하세요.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter the address and pairing code."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "주소와 페어링 코드를 입력하세요."
+          }
+        }
+      }
+    },
+    "중지됨": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopped"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "중지됨"
+          }
+        }
+      }
+    },
+    "지금 VPN(Tailscale 등)으로 연결된 기기가 있습니다.\n자동 발견은 같은 와이파이에서만 동작하니, 'IP 직접 연결' 탭을 사용하세요.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A device is connected over VPN (Tailscale, etc.).\nAuto discovery only works on the same Wi-Fi, so use the 'Connect by IP' tab."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지금 VPN(Tailscale 등)으로 연결된 기기가 있습니다.\n자동 발견은 같은 와이파이에서만 동작하니, 'IP 직접 연결' 탭을 사용하세요."
+          }
+        }
+      }
+    },
+    "지금 다시 시작": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart now"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지금 다시 시작"
+          }
+        }
+      }
+    },
+    "지우기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지우기"
+          }
+        }
+      }
+    },
+    "지원하지 않는 코덱": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unsupported codec"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "지원하지 않는 코덱"
+          }
+        }
+      }
+    },
+    "창 닫기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close window"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "창 닫기"
+          }
+        }
+      }
+    },
+    "찾는 중… 기기가 보이지 않으면\n폰에서 무선 디버깅을 켜고 맥과 같은 Wi-Fi에 연결하세요.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Searching… If your device doesn't show up,\nturn on Wireless debugging and join the same Wi-Fi as the Mac."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "찾는 중… 기기가 보이지 않으면\n폰에서 무선 디버깅을 켜고 맥과 같은 Wi-Fi에 연결하세요."
+          }
+        }
+      }
+    },
+    "초저지연 하드웨어 디코딩 (scrcpy 기반)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ultra-low-latency hardware decoding (based on scrcpy)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "초저지연 하드웨어 디코딩 (scrcpy 기반)"
+          }
+        }
+      }
+    },
+    "최근 창": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recent windows"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최근 창"
+          }
+        }
+      }
+    },
+    "최대 해상도": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Max resolution"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최대 해상도"
+          }
+        }
+      }
+    },
+    "최대화 / 이전 크기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maximize / Restore size"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최대화 / 이전 크기"
+          }
+        }
+      }
+    },
+    "최소화": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimize"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최소화"
+          }
+        }
+      }
+    },
+    "최소화된 창": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimized windows"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최소화된 창"
+          }
+        }
+      }
+    },
+    "최소화됨": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minimized"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "최소화됨"
+          }
+        }
+      }
+    },
+    "캐시": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cache"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "캐시"
+          }
+        }
+      }
+    },
+    "캘린더 앱 열기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Calendar app"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "캘린더 앱 열기"
+          }
+        }
+      }
+    },
+    "캘린더에서 열기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in Calendar"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "캘린더에서 열기"
+          }
+        }
+      }
+    },
+    "코드": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Code"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "코드"
+          }
+        }
+      }
+    },
+    "코드 입력": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter code"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "코드 입력"
+          }
+        }
+      }
+    },
+    "크기 조절": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resize"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "크기 조절"
+          }
+        }
+      }
+    },
+    "터치 표시": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show touches"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "터치 표시"
+          }
+        }
+      }
+    },
+    "특징": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Features"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "특징"
+          }
+        }
+      }
+    },
+    "파일 보내기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send File"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "파일 보내기"
+          }
+        }
+      }
+    },
+    "파일 전송 중… %lld개": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sending files… %lld"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "파일 전송 중… %lld개"
+          }
+        }
+      }
+    },
+    "페어링": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pairing"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "페어링"
+          }
+        }
+      }
+    },
+    "페어링 대기중": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting to pair"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "페어링 대기중"
+          }
+        }
+      }
+    },
+    "페어링 시간 초과(%@) — 폰의 '기기 페어링' 창이 열려 있는 동안만 주소·코드가 유효합니다. 주소(포트 포함)를 다시 확인하세요.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pairing timed out (%@) — the address and code are only valid while 'Pair device' is open on the phone. Check the address (with port) again."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "페어링 시간 초과(%@) — 폰의 '기기 페어링' 창이 열려 있는 동안만 주소·코드가 유효합니다. 주소(포트 포함)를 다시 확인하세요."
+          }
+        }
+      }
+    },
+    "페어링 실패: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pairing failed: %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "페어링 실패: %@"
+          }
+        }
+      }
+    },
+    "페어링 완료 — 자동으로 연결합니다": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paired — connecting automatically"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "페어링 완료 — 자동으로 연결합니다"
+          }
+        }
+      }
+    },
+    "페어링 주소": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pairing address"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "페어링 주소"
+          }
+        }
+      }
+    },
+    "페어링 중… (12초 안에 안 되면 자동 중단)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pairing… (stops automatically after 12 seconds)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "페어링 중… (12초 안에 안 되면 자동 중단)"
+          }
+        }
+      }
+    },
+    "페어링 코드": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pairing code"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "페어링 코드"
+          }
+        }
+      }
+    },
+    "페어링 코드가 틀렸거나 만료됐습니다 — 폰에서 '페어링 코드로 기기 페어링'을 다시 열고, 새 코드와 새 주소(포트 포함)로 시도하세요.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The pairing code was wrong or expired — reopen 'Pair device with pairing code' on the phone and try again with the new code and address (with port)."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "페어링 코드가 틀렸거나 만료됐습니다 — 폰에서 '페어링 코드로 기기 페어링'을 다시 열고, 새 코드와 새 주소(포트 포함)로 시도하세요."
+          }
+        }
+      }
+    },
+    "페어링은 기기마다 한 번만 필요합니다. 이후에는 'IP 직접 연결'이나 '자동 발견'로 즉시 연결됩니다.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pairing is needed only once per device. After that, 'Connect by IP' or 'Auto discovery' connects instantly."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "페어링은 기기마다 한 번만 필요합니다. 이후에는 'IP 직접 연결'이나 '자동 발견'로 즉시 연결됩니다."
+          }
+        }
+      }
+    },
+    "폰 Wi-Fi 설정 열기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open phone Wi-Fi settings"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "폰 Wi-Fi 설정 열기"
+          }
+        }
+      }
+    },
+    "폰 깨우기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wake phone"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "폰 깨우기"
+          }
+        }
+      }
+    },
+    "폰 설정 열기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open phone Settings"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "폰 설정 열기"
+          }
+        }
+      }
+    },
+    "폰 화면 밝기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Phone screen brightness"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "폰 화면 밝기"
+          }
+        }
+      }
+    },
+    "폰 화면이 꺼져 있어 데스크톱이 멈춰 있습니다": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The phone screen is off, so the desktop is paused"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "폰 화면이 꺼져 있어 데스크톱이 멈춰 있습니다"
+          }
+        }
+      }
+    },
+    "폰: 설정 → 개발자 옵션 → 무선 디버깅": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn the phone on to pick up where you left off"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "폰: 설정 → 개발자 옵션 → 무선 디버깅"
+          }
+        }
+      }
+    },
+    "폰에 뜨는 'USB 디버깅 허용' 알림에서 이 컴퓨터를 허용하세요.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Phone: Settings → Developer options → Wireless debugging"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "폰에 뜨는 'USB 디버깅 허용' 알림에서 이 컴퓨터를 허용하세요."
+          }
+        }
+      }
+    },
+    "폰에서 USB 디버깅을 허용해주세요": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow this computer in the 'Allow USB debugging' prompt on the phone."
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "폰에서 USB 디버깅을 허용해주세요"
+          }
+        }
+      }
+    },
+    "폰을 맥에 연결하세요": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow USB debugging on the phone"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "폰을 맥에 연결하세요"
+          }
+        }
+      }
+    },
+    "폰을 켜면 바로 이어서 쓸 수 있어요": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect your phone to the Mac"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "폰을 켜면 바로 이어서 쓸 수 있어요"
+          }
+        }
+      }
+    },
+    "폴더 이름": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder name"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "폴더 이름"
+          }
+        }
+      }
+    },
+    "폴더 해제": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ungroup Folder"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "폴더 해제"
+          }
+        }
+      }
+    },
+    "폴더에서 빼기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove from Folder"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "폴더에서 빼기"
+          }
+        }
+      }
+    },
+    "프라이버시": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Privacy"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프라이버시"
+          }
+        }
+      }
+    },
+    "프레임 제한": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frame limit"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프레임 제한"
+          }
+        }
+      }
+    },
+    "프리셋": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preset"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프리셋"
+          }
+        }
+      }
+    },
+    "해상도": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resolution"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "해상도"
+          }
+        }
+      }
+    },
+    "허용했어요, 다시 찾기": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I allowed it — search again"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "허용했어요, 다시 찾기"
+          }
+        }
+      }
+    },
+    "홈 — 모든 창 최소화": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Home — minimize all windows"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "홈 — 모든 창 최소화"
+          }
+        }
+      }
+    },
+    "화면": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screen"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "화면"
+          }
+        }
+      }
+    },
+    "화면 미러링": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screen Mirroring"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "화면 미러링"
+          }
+        }
+      }
+    },
+    "화면 품질": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screen quality"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "화면 품질"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

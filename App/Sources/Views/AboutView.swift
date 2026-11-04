@@ -48,7 +48,7 @@ struct AboutView: View {
 
             Section("오픈소스 고지") {
                 ScrollView {
-                    Text(noticeText.isEmpty ? "LICENSES/NOTICE.md를 불러올 수 없습니다." : noticeText)
+                    Text(noticeText.isEmpty ? String(localized: "LICENSES/NOTICE.md를 불러올 수 없습니다.") : noticeText)
                         .font(.system(size: 11, design: .monospaced))
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -65,11 +65,11 @@ struct AboutView: View {
     }
 
     private let features: [(name: String, detail: String)] = [
-        ("미러링", "초저지연 하드웨어 디코딩 (scrcpy 기반)"),
-        ("DeX 데스크톱", "MacDroid 데스크톱 — 앱을 창으로, 독·상태표시줄·바탕화면 아이콘"),
-        ("입력", "물리 키보드·마우스·호버·한글 입력"),
-        ("무선", "Wi-Fi 페어링/연결, 같은 네트워크 자동 발견"),
-        ("프라이버시", "모든 통신은 로컬(USB/Wi-Fi) — 서버 없음"),
+        (String(localized: "미러링"), String(localized: "초저지연 하드웨어 디코딩 (scrcpy 기반)")),
+        (String(localized: "DeX 데스크톱"), String(localized: "MacDroid 데스크톱 — 앱을 창으로, 독·상태표시줄·바탕화면 아이콘")),
+        (String(localized: "입력"), String(localized: "물리 키보드·마우스·호버·한글 입력")),
+        (String(localized: "무선"), String(localized: "Wi-Fi 페어링/연결, 같은 네트워크 자동 발견")),
+        (String(localized: "프라이버시"), String(localized: "모든 통신은 로컬(USB/Wi-Fi) — 서버 없음")),
     ]
 
     private var appVersion: String {

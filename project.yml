@@ -1,6 +1,8 @@
 name: MacDroid
 options:
   bundleIdPrefix: kr.macdroid
+  # 소스 문자열은 한국어, 번역은 App/Resources/Localizable.xcstrings(영어)
+  developmentLanguage: ko
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
@@ -16,6 +18,8 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     ENABLE_HARDENED_RUNTIME: "NO"
     DEAD_CODE_STRIPPING: "YES"
+    SWIFT_EMIT_LOC_STRINGS: "YES"
+    LOCALIZATION_PREFERS_STRING_CATALOGS: "YES"
 targets:
   MacDroid:
     type: application

@@ -45,9 +45,9 @@ struct Device: Identifiable, Equatable, Sendable, Hashable {
     var stateBadge: String {
         switch state {
         case .online: return isUSB ? "USB" : "Wi-Fi"
-        case .offline: return "오프라인"
-        case .unauthorized: return "승인 필요"
-        case .unknown: return "인식 안 됨"
+        case .offline: return String(localized: "오프라인")
+        case .unauthorized: return String(localized: "승인 필요")
+        case .unknown: return String(localized: "인식 안 됨")
         }
     }
 }
@@ -100,6 +100,8 @@ struct AndroidApp: Identifiable, Hashable, Sendable {
 struct MdnsService: Identifiable, Equatable, Sendable {
     let name: String
     let address: String  // ip:port
+    /// 페어링 대기 서비스(_adb-tls-pairing) — 이름(표시 문구)이 언어에 따라 바뀌므로 판별은 이 값으로.
+    var isPairing = false
     var id: String { name + address }
 }
 
@@ -115,17 +117,17 @@ enum QualityPreset: String, CaseIterable, Codable, Sendable, Identifiable {
 
     var title: String {
         switch self {
-        case .balanced: return "균형"
-        case .crisp: return "선명"
-        case .lightweight: return "가볍게"
+        case .balanced: return String(localized: "균형")
+        case .crisp: return String(localized: "선명")
+        case .lightweight: return String(localized: "가볍게")
         }
     }
 
     var subtitle: String {
         switch self {
-        case .balanced: return "H.264 · 20 Mbps · 최대 1920px"
-        case .crisp: return "H.265 · 30 Mbps · 최대 2560px"
-        case .lightweight: return "H.264 · 4 Mbps · 최대 1280px · 60fps 제한"
+        case .balanced: return String(localized: "H.264 · 20 Mbps · 최대 1920px")
+        case .crisp: return String(localized: "H.265 · 30 Mbps · 최대 2560px")
+        case .lightweight: return String(localized: "H.264 · 4 Mbps · 최대 1280px · 60fps 제한")
         }
     }
 

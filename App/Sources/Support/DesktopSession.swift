@@ -270,7 +270,7 @@ final class DesktopSession {
     private func streamEnded(_ message: String?) {
         guard stream != nil else { return }
         stop()
-        phase = .failed(message ?? "기기와 연결이 끊어졌습니다")
+        phase = .failed(message ?? String(localized: "기기와 연결이 끊어졌습니다"))
     }
 
     private func scheduleDisplayResize(backingScale: CGFloat) {
@@ -378,7 +378,7 @@ final class DesktopSession {
                     await poll()
                 }
             } catch {
-                appState?.showError("\(app.displayLabel) 실행 실패: \(error.localizedDescription)")
+                appState?.showError(String(localized: "\(app.displayLabel) 실행 실패: \(error.localizedDescription)"))
             }
             try? await Task.sleep(for: .seconds(3))
             launching.remove(app.package)
@@ -726,9 +726,9 @@ final class DesktopSession {
             }
         }
         let existing = Set(folders.values.map(\.name))
-        var name = "새 폴더"
+        var name = String(localized: "새 폴더")
         var n = 2
-        while existing.contains(name) { name = "새 폴더 \(n)"; n += 1 }
+        while existing.contains(name) { name = String(localized: "새 폴더 \(n)"); n += 1 }
         folders[id] = DesktopFolder(name: name, packages: packages)
         let anchor = point ?? items.first.flatMap { iconPositions[$0] }
         let index = items.compactMap { desktopPackages.firstIndex(of: $0) }.min() ?? desktopPackages.count

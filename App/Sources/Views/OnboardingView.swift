@@ -27,19 +27,19 @@ struct OnboardingView: View {
 
             VStack(alignment: .leading, spacing: 14) {
                 GuideStep(number: 1,
-                          title: "개발자 옵션 켜기",
-                          detail: "설정 → 휴대전화 정보 → 소프트웨어 정보 → 빌드 번호를 7번 누릅니다.")
+                          title: String(localized: "개발자 옵션 켜기"),
+                          detail: String(localized: "설정 → 휴대전화 정보 → 소프트웨어 정보 → 빌드 번호를 7번 누릅니다."))
                 GuideStep(number: 2,
-                          title: "USB 디버깅 허용",
-                          detail: "설정 → 개발자 옵션 → USB 디버깅을 켭니다. (무선 디버깅도 같이 켜두면 편합니다)")
+                          title: String(localized: "USB 디버깅 허용"),
+                          detail: String(localized: "설정 → 개발자 옵션 → USB 디버깅을 켭니다. (무선 디버깅도 같이 켜두면 편합니다)"))
                 GuideStep(number: 3,
-                          title: "USB 케이블 연결",
-                          detail: "폰에 뜨는 'USB 디버깅 허용' 알림에서 이 컴퓨터를 허용하세요.")
+                          title: String(localized: "USB 케이블 연결"),
+                          detail: String(localized: "폰에 뜨는 'USB 디버깅 허용' 알림에서 이 컴퓨터를 허용하세요."))
 
                 HStack(spacing: 8) {
                     Image(systemName: connected ? "checkmark.circle.fill" : "dot.radiowaves.left.and.right")
                         .foregroundStyle(connected ? Color.green : Color.secondary)
-                    Text(connected ? "기기 연결됨! 잠시 후 자동으로 닫힙니다" : "기기 연결 대기 중…")
+                    Text(connected ? String(localized: "기기 연결됨! 잠시 후 자동으로 닫힙니다") : String(localized: "기기 연결 대기 중…"))
                         .font(.callout)
                         .foregroundStyle(connected ? Color.green : Color.secondary)
                 }

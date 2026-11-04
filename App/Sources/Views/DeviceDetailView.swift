@@ -122,28 +122,28 @@ struct DeviceDetailView: View {
     private var actionBar: some View {
         Grid(alignment: .center, horizontalSpacing: 12, verticalSpacing: 12) {
             GridRow {
-                ActionButton(title: "화면 미러링", icon: "rectangle.on.rectangle",
+                ActionButton(title: String(localized: "화면 미러링"), icon: "rectangle.on.rectangle",
                              prominent: device.state == .online) {
                     appState.launchMirror(for: device)
                 }
                 /* 정책: DeX 데스크톱 = MacDroid가 그리는 데스크톱 창 하나(배경화면·상태표시줄·독·내비바).
                    앱은 그 안의 창으로 열린다(앱 런처·독 어디서 열어도 같은 데스크톱). */
-                ActionButton(title: "DeX 데스크톱", icon: "dock.rectangle",
+                ActionButton(title: String(localized: "DeX 데스크톱"), icon: "dock.rectangle",
                              prominent: device.state == .online) {
                     openWindow(id: "desktop", value: device.serial)
                 }
                 .help("MacDroid 데스크톱을 엽니다 — 앱은 그 안에서 창으로 열리고, 독 고정·바탕화면 아이콘을 쓸 수 있습니다")
             }
             GridRow {
-                ActionButton(title: "DeX 앱 런처", icon: "square.grid.2x2") {
+                ActionButton(title: String(localized: "DeX 앱 런처"), icon: "square.grid.2x2") {
                     openWindow(id: "launcher", value: device.serial)
                 }
                 if device.isUSB {
-                    ActionButton(title: "무선으로 전환", icon: "wifi") {
+                    ActionButton(title: String(localized: "무선으로 전환"), icon: "wifi") {
                         appState.enableWireless(for: device)
                     }
                 }
-                ActionButton(title: "파일 보내기", icon: "tray.and.arrow.up") {
+                ActionButton(title: String(localized: "파일 보내기"), icon: "tray.and.arrow.up") {
                     showFileImporter = true
                 }
             }
@@ -205,12 +205,12 @@ struct DeviceDetailView: View {
 
     private var infoCard: some View {
         VStack(alignment: .leading, spacing: 0) {
-            LabeledRow(label: "제조사", value: [device.manufacturer, device.brand]
+            LabeledRow(label: String(localized: "제조사"), value: [device.manufacturer, device.brand]
                 .compactMap { $0 }.removingDuplicates().joined(separator: " · "))
             LabeledRow(label: "Android", value: device.androidVersion.map { "\($0) (API \(device.sdkInt.map(String.init) ?? "?"))" })
-            LabeledRow(label: "화면", value: device.screenSize)
-            LabeledRow(label: "시리얼", value: device.serial, monospaced: true)
-            LabeledRow(label: "연결", value: device.isUSB ? "USB" : "Wi-Fi (adb over TCP)")
+            LabeledRow(label: String(localized: "화면"), value: device.screenSize)
+            LabeledRow(label: String(localized: "시리얼"), value: device.serial, monospaced: true)
+            LabeledRow(label: String(localized: "연결"), value: device.isUSB ? "USB" : "Wi-Fi (adb over TCP)")
         }
         .padding(16)
         .background(.background, in: RoundedRectangle(cornerRadius: 12))

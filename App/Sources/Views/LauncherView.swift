@@ -68,7 +68,7 @@ struct LauncherView: View {
                 }
             }
         }
-        .searchable(text: $searchText, placement: .toolbar, prompt: "앱 검색")
+        .searchable(text: $searchText, placement: .toolbar, prompt: String(localized: "앱 검색"))
         .onExitCommand { dismissWindow() }
         .task {
             load()
@@ -117,7 +117,7 @@ struct LauncherView: View {
 
     private func launch(_ app: AndroidApp, newInstance: Bool = false) {
         guard let device, device.state == .online else {
-            appState.showError("기기가 온라인이 아닙니다.")
+            appState.showError(String(localized: "기기가 온라인이 아닙니다."))
             return
         }
         appState.launchAppWindow(for: device, app: app, forceNewInstance: newInstance)

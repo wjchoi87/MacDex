@@ -130,7 +130,7 @@ final class AppState {
                 )
                 reconnectRememberedWirelessHosts()
             } catch {
-                lastError = "기기 감시 시작 실패: \(error.localizedDescription)"
+                lastError = String(localized: "기기 감시 시작 실패: \(error.localizedDescription)")
                 scheduleMonitorRestart()
             }
         }
@@ -168,7 +168,7 @@ final class AppState {
                 }
                 let restored = await reconnectRememberedHosts()
                 if !restored.isEmpty {
-                    toast = "무선 기기 다시 연결됨: \(restored.joined(separator: ", "))"
+                    toast = String(localized: "무선 기기 다시 연결됨: \(restored.joined(separator: ", "))")
                 }
             }
         }
@@ -319,7 +319,7 @@ final class AppState {
             id: Scrcpy.makeID(serial: device.serial, mode: .mirror, package: nil),
             deviceSerial: device.serial,
             mode: .mirror,
-            title: "MacDroid · \(device.displayModel) 미러링"
+            title: String(localized: "MacDroid · \(device.displayModel) 미러링")
         )
         let args = Scrcpy.mirrorArguments(device: device, settings: settings, audioAllowed: true)
         beginStayAwakeIfNeeded(serial: device.serial)
@@ -329,7 +329,7 @@ final class AppState {
             sessions.removeAll { $0.id == session.id }
             sessions.append(session)
         } catch {
-            lastError = "미러링 시작 실패: \(error.localizedDescription)"
+            lastError = String(localized: "미러링 시작 실패: \(error.localizedDescription)")
         }
     }
 
@@ -419,9 +419,9 @@ final class AppState {
                 }
                 let label: String
                 switch mode {
-                case .mirror: label = "미러링"
-                case .app: label = "앱 창 (\(package ?? "?"))"
-                case .dex: label = "DeX 데스크톱"
+                case .mirror: label = String(localized: "미러링")
+                case .app: label = String(localized: "앱 창 (\(package ?? "?"))")
+                case .dex: label = String(localized: "DeX 데스크톱")
                 }
                 found[entry.pid] = ScrcpySession(
                     id: Scrcpy.makeID(serial: serial, mode: mode, package: package),
@@ -452,7 +452,7 @@ final class AppState {
                 }
 
                 self.sessions.append(contentsOf: adopted)
-                self.toast = "이전 실행의 창 \(adopted.count)개를 다시 관리합니다 (닫기로 종료 가능)"
+                self.toast = String(localized: "이전 실행의 창 \(adopted.count)개를 다시 관리합니다 (닫기로 종료 가능)")
             }
         }
     }
@@ -494,12 +494,12 @@ final class AppState {
         let host = rawHost.trimmingCharacters(in: .whitespacesAndNewlines)
         let code = rawCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !host.isEmpty, !code.isEmpty else {
-            lastError = "주소와 페어링 코드를 입력하세요."
+            lastError = String(localized: "주소와 페어링 코드를 입력하세요.")
             return
         }
         guard busyMessage == nil else { return }
         lastError = nil
-        busyMessage = "페어링 중… (12초 안에 안 되면 자동 중단)"
+        busyMessage = String(localized: "페어링 중… (12초 안에 안 되면 자동 중단)")
         Task {
             var result = await Self.attemptPair(host: host, code: code)
             if case .failure(let error) = result, Self.isNetworkPairFailure(error), Self.isPrivateLANHost(host) {
@@ -519,7 +519,7 @@ final class AppState {
             busyMessage = nil
             switch result {
             case .success:
-                toast = "페어링 완료 — 자동으로 연결합니다"
+                toast = String(localized: "페어링 완료 — 자동으로 연결합니다")
                 // 페어링 전엔 notAuthenticated였던 같은 폰의 connect 서비스를 즉시 다시 붙인다
                 autoConnectTried.removeAll()
                 for service in discovery.services where service.kind == .connect {
@@ -536,7 +536,7 @@ final class AppState {
         guard !host.isEmpty else { return }
         guard busyMessage == nil else { return }
         lastError = nil
-        busyMessage = "연결 중… \(host)"
+        busyMessage = String(localized: "연결 중… \(host)")
         Task {
             let result = await connectWithRecovery(host: host)
             busyMessage = nil
@@ -601,7 +601,7 @@ final class AppState {
             }
             guard !isShuttingDown, !isOnline(service) else { return }
             let name = service.displayName
-            busyMessage = "\(name) 발견 — 무선으로 자동 연결 중…"
+            busyMessage = String(localized: "\(name) 발견 — 무선으로 자동 연결 중…")
             let result = await connectWithRecovery(host: service.address)
             busyMessage = nil
             switch result {
@@ -609,7 +609,7 @@ final class AppState {
                 autoConnectTried[service.address] = nil
                 lastError = Self.localNetworkDeniedMessage
             case .outcome(.online, _):
-                toast = "\(name) 무선 연결됨"
+                toast = String(localized: "\(name) 무선 연결됨")
                 // 그 사이 서버 mDNS 자동연결도 붙었으면 우리 ip:port 전송을 내려 중복을 없앤다
                 if let list = try? await ADB.listDevices(),
                    list.contains(where: { $0.state == .online && $0.serial.hasPrefix(service.instance) }) {
@@ -618,7 +618,7 @@ final class AppState {
             case .outcome(.notAuthenticated, _):
                 // 페어링 전에는 다시 두드려도 소용없다 — 페어링 성공/다시 찾기까지 재시도 중단(안내 반복 방지)
                 autoConnectTried[service.address] = .distantFuture
-                lastError = "\(name)이(가) 같은 Wi-Fi에 있지만 이 맥과 아직 페어링되지 않았습니다 — '무선 기기 연결'을 누르고, 폰의 무선 디버깅 → '페어링 코드로 기기 페어링'을 열면 주소가 자동으로 채워집니다. 코드만 입력하세요(최초 1회)."
+                lastError = String(localized: "\(name)이(가) 같은 Wi-Fi에 있지만 이 맥과 아직 페어링되지 않았습니다 — '무선 기기 연결'을 누르고, 폰의 무선 디버깅 → '페어링 코드로 기기 페어링'을 열면 주소가 자동으로 채워집니다. 코드만 입력하세요(최초 1회).")
             case .outcome(let outcome, let serverRestarted):
                 report(outcome, host: service.address, serverRestarted: serverRestarted)
             }
@@ -646,30 +646,30 @@ final class AppState {
     private func report(_ outcome: ADB.ConnectOutcome, host: String, serverRestarted: Bool) {
         switch outcome {
         case .online:
-            toast = "\(host) 연결됨"
+            toast = String(localized: "\(host) 연결됨")
         case .unauthorized:
-            lastError = "\(host) — 폰 화면의 'USB 디버깅을 허용하시겠습니까?'에서 '허용'을 누르면 바로 연결됩니다."
+            lastError = String(localized: "\(host) — 폰 화면의 'USB 디버깅을 허용하시겠습니까?'에서 '허용'을 누르면 바로 연결됩니다.")
         case .notAuthenticated:
-            lastError = "\(host)에 닿았지만 기기가 인증하지 않았습니다. 무선 디버깅 화면의 포트(5555가 아닌 포트)라면 먼저 '페어링 코드' 탭에서 이 맥을 페어링하세요."
+            lastError = String(localized: "\(host)에 닿았지만 기기가 인증하지 않았습니다. 무선 디버깅 화면의 포트(5555가 아닌 포트)라면 먼저 '페어링 코드' 탭에서 이 맥을 페어링하세요.")
         case .refused:
-            lastError = "\(host) — 포트가 닫혀 있습니다. 폰의 무선 디버깅 화면에 나온 현재 포트를 확인하세요(무선 디버깅을 다시 켤 때마다 바뀝니다)."
+            lastError = String(localized: "\(host) — 포트가 닫혀 있습니다. 폰의 무선 디버깅 화면에 나온 현재 포트를 확인하세요(무선 디버깅을 다시 켤 때마다 바뀝니다).")
         case .unreachable, .timedOut:
             if serverRestarted {
-                lastError = "adb 서버를 MacDroid 권한으로 재시작했지만 \(host)에 여전히 닿지 않습니다. 시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 MacDroid가 켜져 있는지 확인하세요."
+                lastError = String(localized: "adb 서버를 MacDroid 권한으로 재시작했지만 \(host)에 여전히 닿지 않습니다. 시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 MacDroid가 켜져 있는지 확인하세요.")
             } else if Self.isPrivateLANHost(host) {
-                lastError = "\(host)에 닿을 수 없습니다 — 폰과 맥이 같은 Wi-Fi인지, 폰 IP가 바뀌지 않았는지 확인하세요."
+                lastError = String(localized: "\(host)에 닿을 수 없습니다 — 폰과 맥이 같은 Wi-Fi인지, 폰 IP가 바뀌지 않았는지 확인하세요.")
             } else {
-                lastError = "\(host) 연결 시간 초과 — 주소·포트를 확인하세요. (VPN이면 폰의 VPN IP:5555, 무선 디버깅 포트는 같은 Wi-Fi에서만 닿습니다)"
+                lastError = String(localized: "\(host) 연결 시간 초과 — 주소·포트를 확인하세요. (VPN이면 폰의 VPN IP:5555, 무선 디버깅 포트는 같은 Wi-Fi에서만 닿습니다)")
             }
         case .failed(let raw):
-            lastError = "\(host) 연결 실패: \(raw)"
+            lastError = String(localized: "\(host) 연결 실패: \(raw)")
         }
     }
 
     private static let restartingServerMessage =
-        "adb 서버가 로컬 네트워크에 닿지 못해 MacDroid 권한으로 재시작합니다… (다른 adb 도구의 연결이 잠시 끊깁니다)"
+        String(localized: "adb 서버가 로컬 네트워크에 닿지 못해 MacDroid 권한으로 재시작합니다… (다른 adb 도구의 연결이 잠시 끊깁니다)")
     private static let localNetworkDeniedMessage =
-        "MacDroid의 로컬 네트워크 접근이 꺼져 있습니다 — 시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 MacDroid를 켜세요."
+        String(localized: "MacDroid의 로컬 네트워크 접근이 꺼져 있습니다 — 시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 MacDroid를 켜세요.")
 
     /// 포트가 없으면 tcpip 기본 포트(5555)를 붙인다.
     private static func normalizedHost(_ raw: String) -> String {
@@ -713,18 +713,18 @@ final class AppState {
     private static func pairFailureMessage(host: String, error: Error) -> String {
         let text = error.localizedDescription.lowercased()
         if text.contains("wrong password") {
-            return "페어링 코드가 틀렸거나 만료됐습니다 — 폰에서 '페어링 코드로 기기 페어링'을 다시 열고, 새 코드와 새 주소(포트 포함)로 시도하세요."
+            return String(localized: "페어링 코드가 틀렸거나 만료됐습니다 — 폰에서 '페어링 코드로 기기 페어링'을 다시 열고, 새 코드와 새 주소(포트 포함)로 시도하세요.")
         }
         if case ProcessError.timedOut = error {
-            return "페어링 시간 초과(\(host)) — 폰의 '기기 페어링' 창이 열려 있는 동안만 주소·코드가 유효합니다. 주소(포트 포함)를 다시 확인하세요."
+            return String(localized: "페어링 시간 초과(\(host)) — 폰의 '기기 페어링' 창이 열려 있는 동안만 주소·코드가 유효합니다. 주소(포트 포함)를 다시 확인하세요.")
         }
         if text.contains("refused") {
-            return "\(host) — 페어링 포트가 닫혀 있습니다. 폰의 '기기 페어링' 창을 다시 열어 새 주소를 확인하세요."
+            return String(localized: "\(host) — 페어링 포트가 닫혀 있습니다. 폰의 '기기 페어링' 창을 다시 열어 새 주소를 확인하세요.")
         }
         if isNetworkPairFailure(error) {
-            return "\(host)에 닿을 수 없습니다 — 폰과 맥이 같은 Wi-Fi인지 확인하세요."
+            return String(localized: "\(host)에 닿을 수 없습니다 — 폰과 맥이 같은 Wi-Fi인지 확인하세요.")
         }
-        return "페어링 실패: \(error.localizedDescription)"
+        return String(localized: "페어링 실패: \(error.localizedDescription)")
     }
 
     /// 사설 대역(10/8, 172.16/12, 192.168/16, 169.254/16) 판정 — 공인·VPN(100.64/10)은 제외.
@@ -742,15 +742,15 @@ final class AppState {
 
     /// USB 기기를 무선으로 전환.
     func enableWireless(for device: Device) {
-        busyMessage = "무선 모드로 전환 중… (몇 초 걸림)"
+        busyMessage = String(localized: "무선 모드로 전환 중… (몇 초 걸림)")
         Task {
             do {
                 let host = try await ADB.enableWireless(serial: device.serial)
                 busyMessage = nil
-                toast = "무선 연결 완료: \(host) — USB 케이블을 뽑아도 됩니다"
+                toast = String(localized: "무선 연결 완료: \(host) — USB 케이블을 뽑아도 됩니다")
             } catch {
                 busyMessage = nil
-                lastError = "무선 전환 실패: \(error.localizedDescription)"
+                lastError = String(localized: "무선 전환 실패: \(error.localizedDescription)")
             }
         }
     }
@@ -764,17 +764,17 @@ final class AppState {
        실무(performRecovery)는 DeX 실행 실패 시 자동 재시도에서도 재사용한다. */
     func recoverConnections() {
         guard busyMessage == nil else { return }
-        busyMessage = "연결 복구 중… (몇 초 걸림)"
+        busyMessage = String(localized: "연결 복구 중… (몇 초 걸림)")
         restartDiscovery()
         Task {
             let connected = await performRecovery()
             busyMessage = nil
             if !connected.isEmpty {
-                toast = "복구 완료 — \(connected.joined(separator: ", ")) 연결됨"
+                toast = String(localized: "복구 완료 — \(connected.joined(separator: ", ")) 연결됨")
             } else if devices.contains(where: { $0.state == .online }) {
-                toast = "복구 완료 — USB 기기가 인식되었습니다"
+                toast = String(localized: "복구 완료 — USB 기기가 인식되었습니다")
             } else {
-                lastError = "복구 후에도 기기가 보이지 않습니다 — ① 폰 USB 알림 → '파일 전송' 모드 ② 폰 개발자 옵션 → 무선 디버깅 켜기 ③ 맥과 같은 Wi-Fi인지 ④ 맥: 시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 MacDroid 켜기"
+                lastError = String(localized: "복구 후에도 기기가 보이지 않습니다 — ① 폰 USB 알림 → '파일 전송' 모드 ② 폰 개발자 옵션 → 무선 디버깅 켜기 ③ 맥과 같은 Wi-Fi인지 ④ 맥: 시스템 설정 → 개인정보 보호 및 보안 → 로컬 네트워크에서 MacDroid 켜기")
             }
         }
     }
@@ -808,7 +808,7 @@ final class AppState {
         // 3) 서버 mDNS가 보는 무선 디버깅 기기도 접속(페어링 대기 서비스는 제외)
         if let services = try? await ADB.mdnsServices() {
             for service in services
-            where service.name.hasPrefix("무선 디버깅") && !connected.contains(service.address) {
+            where !service.isPairing && !connected.contains(service.address) {
                 if await ADB.connectVerified(host: service.address) == .online {
                     connected.append(service.address)
                 }
@@ -826,7 +826,7 @@ final class AppState {
 
     func pushFiles(_ files: [URL], to device: Device) {
         guard !files.isEmpty else { return }
-        busyMessage = "파일 전송 중… \(files.count)개"
+        busyMessage = String(localized: "파일 전송 중… \(files.count)개")
         Task {
             var failures: [String] = []
             for file in files {
@@ -838,9 +838,9 @@ final class AppState {
             }
             busyMessage = nil
             if failures.isEmpty {
-                toast = "전송 완료: 폰의 Download 폴더에 저장됨"
+                toast = String(localized: "전송 완료: 폰의 Download 폴더에 저장됨")
             } else {
-                lastError = "전송 실패: \(failures.joined(separator: ", "))"
+                lastError = String(localized: "전송 실패: \(failures.joined(separator: ", "))")
             }
         }
     }
