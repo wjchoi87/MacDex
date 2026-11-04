@@ -4,12 +4,12 @@ import CoreMedia
 import VideoToolbox
 import os
 
-/// MacDroid 데스크톱 스트림 — scrcpy-server(4.1)에 직접 붙는 자체 클라이언트.
+/// MacDroid 데스크톱 스트림 — 번들된 scrcpy-server에 직접 붙는 자체 클라이언트(버전: Scrcpy.serverVersion).
 /* 정책: scrcpy 클라이언트 창(SDL)을 쓰지 않는다. 가상 디스플레이 1개(삼성 런처·작업표시줄 없음 —
    vd_system_decorations=false)를 서버로 띄우고, 영상은 VideoToolbox로 직접 디코드해 MacDroid가 앱 창마다
    필요한 영역만 잘라 그린다(DesktopSession/DesktopView). 입력은 같은 서버의 control 소켓으로 보낸다.
    - 영상 1개(인코더 1개)로 창 여러 개 → 앱 실행은 am start만(0.1초), 창마다 scrcpy를 띄우지 않는다
-   - 프로토콜(scrcpy 4.1 소스 기준): tunnel_forward → 첫 소켓(영상)에서 dummy 1바이트 + 기기 이름 64바이트,
+   - 프로토콜(scrcpy 4.1 소스 기준, 5.0.1까지 변경 없음 확인): tunnel_forward → 첫 소켓(영상)에서 dummy 1바이트 + 기기 이름 64바이트,
      코덱 id 4바이트, 세션 헤더 12바이트(크기), 이후 [pts|flags 8][len 4][payload]. 세션 패킷(MSB=1)은 크기 변경.
    영향 범위: DeX 데스크톱 창에서만 쓴다. 미러링/CLI는 기존 scrcpy 그대로. */
 final class DesktopStream: @unchecked Sendable {
@@ -91,12 +91,21 @@ final class DesktopStream: @unchecked Sendable {
         if !wasStopped { onEnd?(message) }
     }
 
+    /* 변경 전 정책: 서버 버전 인자를 "4.1"로 고정했고, 남은 서버 정리(pkill)도 "Server 4.1"만 찾았다.
+       변경 후 정책: 버전 인자는 번들 server 버전(Scrcpy.serverVersion)을 쓰고, 못 읽으면 adb를 건드리기 전에 실패한다.
+         pkill은 버전과 무관하게 MacDroid 데스크톱 서버(vd_system_decorations=false)를 모두 정리한다.
+       변경 이유: brew scrcpy 5.0.1 번들 후 버전 불일치로 서버가 바로 죽어 데스크톱이 열리지 않았다(실측 2026-11-04).
+         버전이 바뀌면 이전 버전 서버가 폰에 남아도 정리되지 않던 문제도 함께 막는다.
+       영향 범위: 데스크톱 열기 전체. 미러링·앱 창(scrcpy 클라이언트)은 vd_system_decorations=false를 쓰지 않아 정리 대상이 아니다. */
     private func run() throws {
         let adb = Binaries.adb.path
+        guard let serverVersion = Scrcpy.serverVersion else {
+            throw StreamError(String(localized: "scrcpy 버전을 확인하지 못했습니다"))
+        }
         // 0) 예전 실행이 남긴 MacDroid 데스크톱 서버 정리(맥 쪽이 비정상 종료되거나 adb가 끊기면 폰에 남아
         //    가상 디스플레이·인코더를 계속 돌린다 — 배터리 낭비, 실측). 패턴의 [s]는 이 셸 명령 자신을 빼기 위함.
         try? runADB(["-s", config.serial, "shell",
-                     "pkill -f '[s]crcpy.Server 4.1 .*vd_system_decorations=false' ; true"])
+                     "pkill -f '[s]crcpy.Server .*vd_system_decorations=false' ; true"])
         // 1) 서버 jar 푸시(같은 파일이면 adb가 건너뛴다)
         try runADB(["-s", config.serial, "push", Binaries.scrcpyServer.path, "/data/local/tmp/scrcpy-server.jar"])
         // 2) 포워드: 로컬 임의 포트 → 기기 localabstract:scrcpy_<scid>
@@ -118,7 +127,7 @@ final class DesktopStream: @unchecked Sendable {
             // 뜨는 부작용이 있지만 한글 입력이 우선 — 동작 확인 후 정책 재조정.
         ]
         if config.maxFPS > 0 { params.append("max_fps=\(config.maxFPS)") }
-        let command = "CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server 4.1 "
+        let command = "CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server \(serverVersion) "
             + params.joined(separator: " ")
         let process = StreamingProcess()
         try process.start(
@@ -131,8 +140,8 @@ final class DesktopStream: @unchecked Sendable {
                 if let id = Scrcpy.parseNewDisplayID(line) { self?.onDisplayID?(id) }
             },
             onExit: { [weak self, weak process] _ in
-                let tail = process?.stderrTail.split(separator: "\n").suffix(2).joined(separator: " ") ?? ""
-                self?.finish(tail.isEmpty ? String(localized: "데스크톱 서버가 종료되었습니다") : tail)
+                let reason = DesktopStream.failureReason(process?.stderrTail ?? "")
+                self?.finish(reason ?? String(localized: "데스크톱 서버가 종료되었습니다"))
             }
         )
         lock.withLock { server = process }
@@ -188,6 +197,24 @@ final class DesktopStream: @unchecked Sendable {
             let isConfig = flags & (1 << 62) != 0
             decoder.decode(payload, isConfig: isConfig)
         }
+    }
+
+    /// 서버 stderr 꼬리에서 보여 줄 실패 이유 — 서버가 남긴 마지막 "ERROR:" 메시지 우선, 없으면 마지막 2줄.
+    /* 변경 전 정책: stderr 마지막 2줄을 그대로 보여 줬다.
+       변경 후 정책: "[server] ERROR: …" 줄의 메시지를 보여 주고, 그런 줄이 없을 때만 마지막 2줄.
+       변경 이유: Java 예외로 죽으면 마지막 2줄이 스택 맨 아래 "at …RuntimeInit…"뿐이라 원인이 안 보였다(실측 2026-11-04).
+       영향 범위: 데스크톱 서버 비정상 종료 시 오류 문구만. */
+    private static func failureReason(_ stderr: String) -> String? {
+        let lines = stderr.split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        if let line = lines.last(where: { $0.contains("ERROR:") }),
+           let range = line.range(of: "ERROR:") {
+            let message = line[range.upperBound...].trimmingCharacters(in: .whitespaces)
+            if !message.isEmpty { return message }
+        }
+        let tail = lines.suffix(2).joined(separator: " ")
+        return tail.isEmpty ? nil : tail
     }
 
     private func updateSize(_ header: [UInt8]) {

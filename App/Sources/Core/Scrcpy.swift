@@ -132,6 +132,33 @@ enum Scrcpy {
         return Int(line[range].filter(\.isNumber))
     }
 
+    /// 번들된 scrcpy-server 버전(예: "5.0.1") — 서버를 직접 띄울 때 첫 인자로 넘기는 값. 못 읽으면 nil.
+    /* 변경 전 정책: DesktopStream이 서버 버전을 "4.1"로 하드코딩해 넘겼다.
+       변경 후 정책: 번들 scrcpy 클라이언트의 `--version`에서 읽어 넘긴다(앱 실행당 1회, 캐시).
+       변경 이유: 서버는 첫 인자가 자기 버전과 다르면 IllegalArgumentException으로 바로 죽는다. brew scrcpy가
+         5.0.1로 오르자 fetch-vendor가 새 server를 번들했고 데스크톱 연결이 전부 실패했다(실측 2026-11-04).
+         client와 server는 fetch-vendor가 같은 brew 설치에서 복사하므로(미러링도 이 짝이 맞아야 동작) 버전이 같다.
+       영향 범위: MacDroid 데스크톱 서버 실행(DesktopStream). 미러링·앱 창은 scrcpy 클라이언트가 직접 맞추므로 무관.
+       주의: DesktopStream 프로토콜은 4.1 소스 기준 — 4.1→5.0.1 server 소스 차이는 audio/camera뿐임을 확인(2026-11-04).
+         메이저 업그레이드 때는 DesktopStream 헤더 주석의 프로토콜과 다시 대조할 것. */
+    static let serverVersion: String? = {
+        let process = Process()
+        process.executableURL = Binaries.scrcpy
+        process.arguments = ["--version"]
+        process.environment = Binaries.processEnvironment
+        let out = Pipe()
+        process.standardOutput = out
+        process.standardError = FileHandle.nullDevice
+        guard (try? process.run()) != nil else { return nil }
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        // 첫 줄: "scrcpy 5.0.1 <https://github.com/Genymobile/scrcpy>"
+        guard let first = String(data: data, encoding: .utf8)?.split(separator: "\n").first else { return nil }
+        let parts = first.split(separator: " ")
+        guard parts.count >= 2, parts[0] == "scrcpy", parts[1].first?.isNumber == true else { return nil }
+        return String(parts[1])
+    }()
+
     /// 세션 실행. 종료 이벤트는 SessionEvents로 방출된다(AppState가 정리).
     /// - Returns: 실행된 프로세스 핸들(세션에 attach해서 종료 가능하게).
     static func launch(arguments: [String], sessionID: String) throws -> StreamingProcess {

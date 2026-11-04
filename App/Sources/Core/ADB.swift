@@ -403,10 +403,13 @@ enum ADB {
 
     /// 지금 떠 있는 MacDroid 데스크톱의 가상 디스플레이 id(없으면 nil) — CLI가 데스크톱에 앱을 열거나 창을 다룰 때.
     /* 판별: MacDroid 데스크톱 서버(vd_system_decorations=false)가 돌고 있고, "scrcpy" 가상 디스플레이 중
-       홈(런처) 태스크가 없는 것(시스템 장식 없는 디스플레이 — CLI app launch 창은 런처가 붙는다). 여럿이면 가장 최근(id 최대). */
+       홈(런처) 태스크가 없는 것(시스템 장식 없는 디스플레이 — CLI app launch 창은 런처가 붙는다). 여럿이면 가장 최근(id 최대).
+       변경 전: 서버 판별을 "Server 4.1"로만 했다. 변경 후: 버전과 무관하게 판별한다.
+       이유: 데스크톱 서버 버전이 번들 server 버전을 따르게 바뀌어(Scrcpy.serverVersion) 4.1 고정 패턴은 못 찾는다(2026-11-04).
+       영향: CLI desktop/window/app open이 데스크톱을 찾는 조건. */
     static func macdroidDesktopDisplayId(serial: String) async -> Int? {
         guard let running = try? await shell(serial: serial,
-                                             "pgrep -f '[s]crcpy.Server 4.1 .*vd_system_decorations=false' || true"),
+                                             "pgrep -f '[s]crcpy.Server .*vd_system_decorations=false' || true"),
               !running.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               let displays = try? await shell(serial: serial, "dumpsys display | grep -o 'DisplayInfo{\"scrcpy\", displayId [0-9]*'")
         else { return nil }

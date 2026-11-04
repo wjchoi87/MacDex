@@ -960,6 +960,22 @@
         }
       }
     },
+    "scrcpy 버전을 확인하지 못했습니다": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't determine the scrcpy version"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "scrcpy 버전을 확인하지 못했습니다"
+          }
+        }
+      }
+    },
     "screencap 실패 — 기기가 잠겨 있거나 화면이 꺼져 있을 수 있음": {
       "localizations": {
         "en": {
