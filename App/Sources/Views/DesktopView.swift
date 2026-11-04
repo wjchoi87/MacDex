@@ -1145,8 +1145,9 @@ private struct AppWindow: View {
                 )
                 .overlay(UnevenRoundedRectangle(bottomLeadingRadius: 6, bottomTrailingRadius: 6)
                     .strokeBorder(.white.opacity(0.12)))
-                .overlay(alignment: .bottomTrailing) { resizeHandle }
+                .overlay(alignment: .bottomTrailing) { resizeGrip }
         }
+        .overlay { resizeHandles(width: frame.width, height: bar + frame.height) }
         .offset(x: frame.minX, y: frame.minY - bar)
     }
 
@@ -1228,29 +1229,135 @@ private struct AppWindow: View {
         )
     }
 
-    private var resizeHandle: some View {
+    /// 오른쪽 아래 크기 조절 표시(그림만 — 잡는 영역은 resizeHandles의 오른쪽 아래 모서리).
+    private var resizeGrip: some View {
         Image(systemName: "arrow.up.left.and.arrow.down.right")
             .font(.system(size: 8, weight: .bold))
             .rotationEffect(.degrees(90))
             .foregroundStyle(.white.opacity(0.35))
             .frame(width: 16, height: 16)
-            .background(Color.black.opacity(0.001))
+            .allowsHitTesting(false)
+    }
+
+    /* 변경 전 정책: 크기 조절은 오른쪽 아래 그립(16pt) 하나로만 됐다(오른쪽·아래로만 늘이고 줄임).
+       변경 후 정책: 맥 창처럼 4면 + 4모서리 어디서든 크기를 바꾼다. 잡는 영역은 테두리를 걸친다
+         (변 8pt = 안 4·밖 4, 모서리 14pt = 안 7·밖 7, 오른쪽 아래만 기존 그립을 덮게 안 16·밖 6).
+         왼쪽·위로 늘이면 반대쪽 변이 고정되고, 최소 크기(280×200)와 제목줄이 캔버스 위로 못 나가는 한계를
+         드래그 중에 바로 적용해 놓을 때 튀지 않게 한다. macOS 15+는 시스템 리사이즈 커서, 14는 상하/좌우 커서만.
+       변경 이유: 대장님 요청(2026-11-04) — 창 크기 조절이 4면·4모서리 모두 돼야 한다.
+       영향 범위: 데스크톱 앱 창의 크기 조절. 확정은 기존 commitDrag(task resize) 그대로.
+         테두리 안쪽 4~7pt는 이제 기기 입력 대신 크기 조절이 된다(제목줄 위 4pt 포함). */
+    private func resizeHandles(width w: CGFloat, height h: CGFloat) -> some View {
+        ZStack {
+            // 모서리를 변보다 위에(겹치는 곳은 모서리가 잡는다)
+            ForEach(ResizeEdge.allCases.filter { !$0.isCorner }, id: \.self) { resizeZone($0, w: w, h: h) }
+            ForEach(ResizeEdge.allCases.filter(\.isCorner), id: \.self) { resizeZone($0, w: w, h: h) }
+        }
+    }
+
+    private func resizeZone(_ edge: ResizeEdge, w: CGFloat, h: CGFloat) -> some View {
+        let corner: CGFloat = 14
+        let size: CGSize
+        var shift: CGFloat = 0   // 모서리 영역을 창 안쪽으로 치우치는 양
+        if edge == .bottomTrailing {
+            size = CGSize(width: 22, height: 22)
+            shift = 5
+        } else if edge.isCorner {
+            size = CGSize(width: corner, height: corner)
+        } else if edge.top || edge.bottom {
+            size = CGSize(width: max(w - corner, 0), height: 8)
+        } else {
+            size = CGSize(width: 8, height: max(h - corner, 0))
+        }
+        let x = edge.left ? shift : edge.right ? w - shift : w / 2
+        let y = edge.top ? shift : edge.bottom ? h - shift : h / 2
+        return Color.clear
+            .frame(width: size.width, height: size.height)
+            .contentShape(Rectangle())
+            .modifier(ResizeCursor(edge: edge))
             .gesture(
                 DragGesture(minimumDistance: 2, coordinateSpace: .named("canvas"))
                     .onChanged { value in
                         let base = dragBase ?? session.contentFrame(window)
                         if dragBase == nil { dragBase = base }
-                        session.dragFrames[window.id] = CGRect(
-                            x: base.minX, y: base.minY,
-                            width: max(base.width + value.translation.width, 280),
-                            height: max(base.height + value.translation.height, 200))
+                        session.dragFrames[window.id] = edge.resized(base, by: value.translation,
+                                                                     minSize: CGSize(width: 280, height: 200),
+                                                                     minY: bar)
                     }
                     .onEnded { _ in
                         dragBase = nil
                         session.commitDrag(window)
                     }
             )
-            .help("크기 조절")
+            .position(x: x, y: y)
+    }
+}
+
+/// 창 크기 조절 방향(4면 + 4모서리).
+private enum ResizeEdge: CaseIterable {
+    case top, bottom, leading, trailing, topLeading, topTrailing, bottomLeading, bottomTrailing
+
+    var left: Bool { self == .leading || self == .topLeading || self == .bottomLeading }
+    var right: Bool { self == .trailing || self == .topTrailing || self == .bottomTrailing }
+    var top: Bool { self == .top || self == .topLeading || self == .topTrailing }
+    var bottom: Bool { self == .bottom || self == .bottomLeading || self == .bottomTrailing }
+    var isCorner: Bool { (left || right) && (top || bottom) }
+
+    /// 드래그 이동량만큼 이 방향으로 바꾼 내용 영역(pt). 잡은 변만 움직이고 반대쪽 변은 고정.
+    /// minY: 내용 윗변의 최솟값(제목줄 높이 — 제목줄이 캔버스 위로 나가지 않게, commitDrag와 같은 한계).
+    func resized(_ base: CGRect, by d: CGSize, minSize: CGSize, minY: CGFloat) -> CGRect {
+        var r = base
+        if left {
+            let width = max(base.width - d.width, minSize.width)
+            r.origin.x = base.maxX - width
+            r.size.width = width
+        } else if right {
+            r.size.width = max(base.width + d.width, minSize.width)
+        }
+        if top {
+            let height = min(max(base.height - d.height, minSize.height), max(base.maxY - minY, minSize.height))
+            r.origin.y = base.maxY - height
+            r.size.height = height
+        } else if bottom {
+            r.size.height = max(base.height + d.height, minSize.height)
+        }
+        return r
+    }
+
+    @available(macOS 15.0, *)
+    var position: FrameResizePosition {
+        switch self {
+        case .top: .top
+        case .bottom: .bottom
+        case .leading: .leading
+        case .trailing: .trailing
+        case .topLeading: .topLeading
+        case .topTrailing: .topTrailing
+        case .bottomLeading: .bottomLeading
+        case .bottomTrailing: .bottomTrailing
+        }
+    }
+
+    /// macOS 14용 커서 — 대각선 리사이즈 커서는 공개 API가 없어 모서리는 기본 커서.
+    var legacyCursor: NSCursor? {
+        if isCorner { return nil }
+        return left || right ? .resizeLeftRight : .resizeUpDown
+    }
+}
+
+/// 크기 조절 영역에 올리면 리사이즈 커서(macOS 15+: 시스템 창 리사이즈 커서).
+private struct ResizeCursor: ViewModifier {
+    let edge: ResizeEdge
+
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content.pointerStyle(.frameResize(position: edge.position))
+        } else {
+            content.onHover { inside in
+                guard let cursor = edge.legacyCursor else { return }
+                if inside { cursor.push() } else { NSCursor.pop() }
+            }
+        }
     }
 }
 
