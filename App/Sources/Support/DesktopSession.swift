@@ -366,10 +366,27 @@ final class DesktopSession {
                 try await ADB.startApp(serial: serial, displayId: displayId, app: app,
                                        newInstance: newInstance, restart: restart)
                 // 첫 프레임이 빨리 보이도록 잠깐 촘촘히 확인
+                /* 변경 전 정책: 창이 목록에 잡히면(opening 해제) 그대로 끝냈다.
+                   결함(실측): 폰 본 화면에서 fullscreen으로 떠 있던 태스크를 moveAppToDisplay로 옮기면
+                   fullscreen windowing이 그대로 남는다 — am start --windowingMode 5는 살아 있는 기존
+                   태스크에는 적용되지 않는다. fullscreen 태스크는 bounds가 디스플레이 전체라 제목줄 없이
+                   캔버스를 덮고(크롬 전체화면 보고), cmd activity task resize도 무시된다.
+                   변경 후 정책: 실행한 앱의 창이 fullscreen windowing으로 잡히면 1회만 -S로 재시작해
+                   freeform 창으로 다시 띄운다(am start -S --windowingMode 5 — 실측: 크롬이
+                   bounds=[54,60][2826,1580] 창으로 부활). 앱 안에서 스스로 전체화면이 된 경우와 구분하기
+                   위해 최초 실행 경로에서만 한다(사용자가 연 앱은 창으로 뜨는 게 의도).
+                   영향 범위: 데스크톱에서 앱을 여는 경로 전부(독·런처·바탕화면·CLI). */
+                var retriedFullscreen = false
                 for _ in 0..<8 {
                     try? await Task.sleep(for: .milliseconds(150))
                     await poll()
                     if !launching.contains(app.package) { break }
+                    if !retriedFullscreen,
+                       let w = windows.first(where: { $0.package == app.package }), w.fullscreen {
+                        retriedFullscreen = true
+                        try? await ADB.startApp(serial: serial, displayId: displayId, app: app,
+                                                newInstance: false, restart: true)
+                    }
                 }
                 // 다른 화면(폰 본 화면)에 이미 떠 있던 앱은 '앞으로 가져오기'만 되고 이 데스크톱엔 안 뜬다 — 옮겨 온다
                 if launching.contains(app.package) {
@@ -486,7 +503,8 @@ final class DesktopSession {
         markActive()
         if let index = windows.firstIndex(where: { $0.id == window.id }) {
             windows[index] = ADB.DesktopWindow(id: window.id, package: window.package,
-                                               component: window.component, bounds: bounds.integral)
+                                               component: window.component, bounds: bounds.integral,
+                                               fullscreen: window.fullscreen)
         }
         dragFrames[window.id] = nil
         Task { await ADB.moveWindow(serial: serial, taskId: window.id, to: bounds) }

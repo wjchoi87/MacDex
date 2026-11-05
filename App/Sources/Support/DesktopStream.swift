@@ -2,6 +2,7 @@ import Foundation
 import AppKit
 import CoreMedia
 import VideoToolbox
+import os
 
 /// MacDroid 데스크톱 스트림 — scrcpy-server(4.1)에 직접 붙는 자체 클라이언트.
 /* 정책: scrcpy 클라이언트 창(SDL)을 쓰지 않는다. 가상 디스플레이 1개(삼성 런처·작업표시줄 없음 —
@@ -12,6 +13,9 @@ import VideoToolbox
      코덱 id 4바이트, 세션 헤더 12바이트(크기), 이후 [pts|flags 8][len 4][payload]. 세션 패킷(MSB=1)은 크기 변경.
    영향 범위: DeX 데스크톱 창에서만 쓴다. 미러링/CLI는 기존 scrcpy 그대로. */
 final class DesktopStream: @unchecked Sendable {
+
+    /// 스트림 제어 경로 진단 로그(Console.app — subsystem=MacDroid).
+    static let log = Logger(subsystem: "kr.macdroid.MacDroid", category: "desktop-stream")
 
     struct Config: Sendable {
         let serial: String
@@ -108,7 +112,10 @@ final class DesktopStream: @unchecked Sendable {
             "scid=\(scid)", "log_level=info", "audio=false", "tunnel_forward=true",
             "video_codec=h264", "video_bit_rate=\(config.bitRateMbps * 1_000_000)",
             "new_display=\(config.width)x\(config.height)/\(config.density)",
-            "flex_display=true", "vd_system_decorations=false", "display_ime_policy=hide",
+            "flex_display=true", "vd_system_decorations=false",
+            // display_ime_policy=hide 제거(실측 원인 후보): 이 정책이 붙은 디스플레이에서는 IME가
+            // 조합 모드를 개시하지 않아 물리 키보드(uhid) 한글이 조합되지 않았다. IME 창이 데스크톱에
+            // 뜨는 부작용이 있지만 한글 입력이 우선 — 동작 확인 후 정책 재조정.
         ]
         if config.maxFPS > 0 { params.append("max_fps=\(config.maxFPS)") }
         let command = "CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server 4.1 "
@@ -119,6 +126,8 @@ final class DesktopStream: @unchecked Sendable {
             arguments: ["-s", config.serial, "shell", command],
             environment: Binaries.processEnvironment,
             onLine: { [weak self] line in
+                // 서버 로그는 INFO 라인뿐 — 원인 진단(예: "Device clipboard set")에 필수라 통째로 흘린다
+                Self.log.info("server: \(line, privacy: .public)")
                 if let id = Scrcpy.parseNewDisplayID(line) { self?.onDisplayID?(id) }
             },
             onExit: { [weak self, weak process] _ in
@@ -153,6 +162,8 @@ final class DesktopStream: @unchecked Sendable {
         lock.withLock { forwardPort = nil }
 
         Thread.detachNewThread { [weak self] in self?.readDeviceMessages(control) }
+        // uhid 물리 키보드 등록 — 한글 조합을 폰 IME가 직접 하게(아래 sendUhidKeyboardCreate 정책 참고)
+        sendUhidKeyboardCreate()
 
         // 5) 기기 이름(64) → 코덱 id(4) → 세션 헤더(12)
         _ = try readExactly(video, 64)
@@ -194,6 +205,8 @@ final class DesktopStream: @unchecked Sendable {
             case 0:  // CLIPBOARD: len(4) + utf8
                 guard let len = try? readExactly(socket, 4),
                       let body = try? readExactly(socket, Int(len.be32(0))) else { return }
+                // SET_CLIPBOARD 직후 이 echo가 오면 기기 클립보드 설정이 실제로 성공한 것이다(진단 신호)
+                Self.log.info("device CLIPBOARD echo bytes=\(body.count, privacy: .public)")
                 if let text = String(bytes: body, encoding: .utf8) { onClipboard?(text) }
             case 1:  // ACK_CLIPBOARD: sequence(8)
                 guard (try? readExactly(socket, 8)) != nil else { return }
@@ -261,6 +274,7 @@ final class DesktopStream: @unchecked Sendable {
     /// ASCII 텍스트 입력(서버가 KeyCharacterMap으로 키 이벤트로 바꾼다 — 한글은 불가, setClipboard(paste:) 사용).
     func text(_ text: String) {
         let bytes = Array(text.utf8.prefix(300))
+        Self.log.info("control INJECT_TEXT bytes=\(bytes.count, privacy: .public)")
         var msg: [UInt8] = [1]
         msg.appendBE(UInt32(bytes.count))
         msg += bytes
@@ -268,14 +282,28 @@ final class DesktopStream: @unchecked Sendable {
     }
 
     /// 기기 클립보드 설정(+붙여넣기) — 맥 → 기기, 한글 등 비ASCII 입력에도 쓴다.
+    /* 변경 전 정책: paste=true로 SET_CLIPBOARD를 보내 서버가 KEYCODE_PASTE(279) 주입을 대신하게 했다.
+       결함(실측): KEYCODE_PASTE는 하드웨어 '붙여넣기 전용키'라 이를 처리하는 앱이 거의 없다 — 크롬 주소창 등은
+       무시해서 "SET_CLIPBOARD 전송됐는데 화면에 아무 글자도 안 찍히는" 한글 입력 불가가 발생했다.
+       변경 후 정책: 클립보드만 설정(paste=false)하고 MacDroid가 직접 Ctrl+V(V + META_CTRL_ON) 키 이벤트를
+       이어서 주입한다. 실측으로 "Device clipboard set"까지는 성공하는데 주입된 Ctrl+V가 무시되어, down과 up
+       사이에 물리 키보드 수준의 시간차(50ms)를 둔다(동시 타임스탬프의 down/up 페어를 앱이 무시할 수 있다).
+       영향 범위: 데스크톱 세션의 비ASCII(한글 등) 텍스트 입력과 ⌘V 붙여넣기. */
     func setClipboard(_ text: String, paste: Bool) {
         let bytes = Array(text.utf8)
+        Self.log.info("control SET_CLIPBOARD bytes=\(bytes.count, privacy: .public) paste=\(paste, privacy: .public) ctrlV=\(paste, privacy: .public)")
         var msg: [UInt8] = [9]
         msg.appendBE(UInt64(0))   // sequence 0 = ack 불필요
-        msg.append(paste ? 1 : 0)
+        msg.append(0)             // paste=false — 붙여넣기 키는 클라이언트가 직접 주입
         msg.appendBE(UInt32(bytes.count))
         msg += bytes
         send(msg)
+        guard paste else { return }
+        key(.down, keycode: 50, metaState: 0x3000)   // KEYCODE_V + META_CTRL_ON|CTRL_LEFT_ON
+        // 물리 키보드처럼 down을 누른 채 잠시 있다 뗀다 — serial 큐 순서 유지
+        controlQueue.asyncAfter(deadline: .now() + .milliseconds(50)) { [weak self] in
+            self?.key(.up, keycode: 50, metaState: 0x3000)
+        }
     }
 
     /// 가상 디스플레이 크기 변경(flex_display).
@@ -283,6 +311,66 @@ final class DesktopStream: @unchecked Sendable {
         var msg: [UInt8] = [21]
         msg.appendBE(UInt16(width))
         msg.appendBE(UInt16(height))
+        send(msg)
+    }
+
+    // MARK: uhid 물리 키보드
+
+    /* 변경 전 정책(한글 입력): 글자를 macOS IME로 확정해 클립보드+붙여넣기(주입 Ctrl+V/KEYCODE_PASTE)로 넣었다.
+       결함(실측): "Device clipboard set"까지는 성공하지만 주입된 붙여넣기 키를 크롬 등 대부분 앱이 무시해
+       한글이 아예 입력되지 않았다. input text도 서버가 한글을 거부했다.
+       변경 후 정책: UHID로 진짜 하드웨어 키보드를 등록하고 HID 키 리포트를 보낸다 — 폰 IME(삼성키보드 한국어)가
+       물리 키보드처럼 직접 조합한다(한/영 전환은 폰 기준 Shift+Space). macOS IME는 거치지 않는다.
+       프로토콜(scrcpy 서버 ControlMessageReader 기준): UHID_CREATE=14 [id 2][vendor 2][product 2][nameLen 1][name][descLen 2][desc],
+       UHID_INPUT=15 [id 2][len 2][report]. descriptor와 8바이트 리포트(modifier+reserved+key×6)는 scrcpy
+       app/src/hid/hid_keyboard.c 것과 동일하다. 서버에 별도 파라미터는 필요 없다(메시지 구동).
+       영향 범위: DeX 데스크톱 창의 키보드 입력 전체. 마우스·클립보드 동기화·⌘ 단축키 주입은 기존 경로 유지. */
+    private static let hidKeyboardDescriptor: [UInt8] = [
+        0x05, 0x01,             // Usage Page (Generic Desktop)
+        0x09, 0x06,             // Usage (Keyboard)
+        0xA1, 0x01,             // Collection (Application)
+        0x05, 0x07,             //   Usage Page (Key Codes)
+        0x19, 0xE0, 0x29, 0xE7, //   Usage Min/Max (224..231: modifiers)
+        0x15, 0x00, 0x25, 0x01, //   Logical Min/Max (0..1)
+        0x75, 0x01, 0x95, 0x08, //   Report Size/Count (1bit × 8)
+        0x81, 0x02,             //   Input: modifier byte
+        0x75, 0x08, 0x95, 0x01, //   Report Size/Count (8bit × 1)
+        0x81, 0x01,             //   Input: reserved byte (constant)
+        0x05, 0x08,             //   Usage Page (LEDs)
+        0x19, 0x01, 0x29, 0x05, //   Usage Min/Max (1..5)
+        0x75, 0x01, 0x95, 0x05, //   1bit × 5
+        0x91, 0x02,             //   Output: LED report
+        0x75, 0x03, 0x95, 0x01, //   3bit × 1
+        0x91, 0x01,             //   Output: LED padding (constant)
+        0x05, 0x07,             //   Usage Page (Key Codes)
+        0x19, 0x00, 0x29, 0x65, //   Usage Min/Max (0..101)
+        0x15, 0x00, 0x25, 0x65, //   Logical Min/Max (0..101)
+        0x75, 0x08, 0x95, 0x06, //   8bit × 6
+        0x81, 0x00,             //   Input: key array
+        0xC0,                   // End Collection
+    ]
+
+    /// uhid 키보드 디바이스 id(클라이언트 정의 식별자 — scrcpy 표준 1번).
+    private static let hidKeyboardID: UInt16 = 1
+
+    func sendUhidKeyboardCreate() {
+        var msg: [UInt8] = [12]   // TYPE_UHID_CREATE (서버 ControlMessage.java 상수 — 13=INPUT, 14=DESTROY)
+        msg.appendBE(Self.hidKeyboardID)
+        msg.appendBE(UInt16(0))   // vendor id
+        msg.appendBE(UInt16(0))   // product id
+        msg.append(0)             // name 길이 0(빈 이름)
+        msg.appendBE(UInt16(Self.hidKeyboardDescriptor.count))
+        msg += Self.hidKeyboardDescriptor
+        Self.log.info("control UHID_CREATE desc=\(Self.hidKeyboardDescriptor.count, privacy: .public)B")
+        send(msg)
+    }
+
+    /// HID 키보드 리포트(8바이트: modifier, reserved, key×6) 전송.
+    func uhidInput(_ report: [UInt8]) {
+        var msg: [UInt8] = [13]   // TYPE_UHID_INPUT
+        msg.appendBE(Self.hidKeyboardID)
+        msg.appendBE(UInt16(report.count))
+        msg += report
         send(msg)
     }
 

@@ -343,6 +343,9 @@ enum ADB {
         let package: String
         let component: String    // pkg/cls (앞으로 가져오기용)
         let bounds: CGRect       // 디스플레이 px
+        /// 태스크가 fullscreen windowing인지 — 폰 본 화면에서 그대로 옮겨 온 태스크가 여기 해당.
+        /// fullscreen 태스크는 bounds가 디스플레이 전체라 창 제목줄 없이 캔버스를 덮고, task resize도 무시된다.
+        let fullscreen: Bool
     }
 
     /// 데스크톱 창 목록 + 디스플레이 크기(홈 태스크 bounds).
@@ -356,7 +359,7 @@ enum ADB {
         let out = try await shell(serial: serial, "cmd activity stack list")
         var windows: [DesktopWindow] = []
         var displaySize: CGSize?
-        var current: (id: Int, bounds: CGRect, standard: Bool, home: Bool, onDisplay: Bool)?
+        var current: (id: Int, bounds: CGRect, standard: Bool, home: Bool, onDisplay: Bool, fullscreen: Bool)?
 
         func rect(_ text: Substring) -> CGRect? {
             let nums = text.split(whereSeparator: { !$0.isNumber && $0 != "-" }).compactMap { Int($0) }
@@ -368,10 +371,11 @@ enum ADB {
             if t.hasPrefix("RootTask id=") {
                 let id = Int(t.dropFirst("RootTask id=".count).prefix { $0.isNumber }) ?? -1
                 let boundsText = t.range(of: #"bounds=\[[-\d,]+\]\[[-\d,]+\]"#, options: .regularExpression).map { t[$0] }
-                current = (id, boundsText.flatMap(rect) ?? .zero, false, false, t.contains("displayId=\(displayId) "))
+                current = (id, boundsText.flatMap(rect) ?? .zero, false, false, t.contains("displayId=\(displayId) "), false)
             } else if t.hasPrefix("configuration="), current != nil {
                 current!.standard = t.contains("mActivityType=standard")
                 current!.home = t.contains("mActivityType=home")
+                current!.fullscreen = t.contains("mWindowingMode=fullscreen")
             } else if t.hasPrefix("taskId="), let task = current, task.onDisplay {
                 current = nil  // 루트 태스크당 첫 태스크만
                 if task.home {
@@ -383,7 +387,8 @@ enum ADB {
                 let component = t[t.index(after: colon)...].split(separator: " ").first.map(String.init) ?? ""
                 guard let slash = component.firstIndex(of: "/") else { continue }
                 windows.append(DesktopWindow(id: task.id, package: String(component[..<slash]),
-                                             component: component, bounds: task.bounds))
+                                             component: component, bounds: task.bounds,
+                                             fullscreen: task.fullscreen))
             }
         }
         return (windows, displaySize)

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import os
 
 /// 앱 창 내용 — 데스크톱 영상에서 그 창 영역만 잘라 그리고, 마우스·키보드를 기기로 보낸다.
 /* 정책: 프레임은 IOSurface를 레이어 contents로 붙이고 contentsRect로 창 영역만 보여 준다(복사 없음, 창 여러 개가
@@ -8,6 +9,10 @@ import AppKit
    키보드: Esc는 뒤로가기(KEYCODE_BACK, 변경 전엔 KEYCODE_ESCAPE). 특수 키(엔터·지우기·방향키 등)와 Ctrl/Option 조합은 키코드로, 글자는 텍스트로 보낸다. ASCII 밖(한글 등)은
    서버의 텍스트 주입이 못 하므로 클립보드 붙여넣기로 넣는다. ⌘C/⌘X/⌘A/⌘Z는 Ctrl 조합으로, ⌘V는 맥 클립보드를 붙여 넣는다. */
 final class DesktopVideoView: NSView, @preconcurrency NSTextInputClient {
+    /// 입력 경로 진단 로그 — 한글 입력이 어느 단계에서 끊기는지 Console.app(subsystem=MacDroid)에서 확인용.
+    /// 입력 내용 자체는 찍지 않는다(개인정보) — 길이·ASCII 여부·분기만.
+    static let log = Logger(subsystem: "kr.macdroid.MacDroid", category: "desktop-input")
+
     weak var session: DesktopSession?
     var windowID = 0
     /// 이 창의 기기 화면 영역(px).
@@ -17,7 +22,6 @@ final class DesktopVideoView: NSView, @preconcurrency NSTextInputClient {
 
     private var pixelSize: CGSize = .zero
     private var buttons: UInt32 = 0
-    private var keysDown: Set<UInt16> = []
     private var marked: String?
 
     override init(frame: NSRect) {
@@ -133,65 +137,83 @@ final class DesktopVideoView: NSView, @preconcurrency NSTextInputClient {
         session?.input?.scroll(at: devicePoint(event), dx: dx, dy: dy)
     }
 
-    // MARK: 키보드
+    // MARK: 키보드 (uhid HID — 폰 IME가 조합)
 
-    /// macOS 키코드 → Android 키코드(글자가 아닌 키).
-    private static let specialKeys: [UInt16: UInt32] = [
-        36: 66, 76: 66,        // Return, Enter → ENTER
-        48: 61,                // Tab
-        51: 67,                // Delete → DEL(백스페이스)
-        117: 112,              // Forward Delete
-        53: 4,                 // Esc → BACK(뒤로가기 — 요청: Esc를 뒤로가기로)
-        123: 21, 124: 22, 125: 20, 126: 19,   // ← → ↓ ↑
-        115: 122, 119: 123,    // Home, End
-        116: 92, 121: 93,      // Page Up/Down
+    /* 변경 전 정책: 글자는 macOS IME로 확정(interpretKeyEvents→insertText)해 ASCII는 서버 텍스트 주입,
+         한글은 클립보드+붙여넣기로 넣었다. 특수키/조합은 Android keycode 주입.
+       결함(실측): 주입된 붙여넣기 키(Ctrl+V·KEYCODE_PASTE)를 앱들이 무시해 한글이 입력되지 않았다.
+       변경 후 정책: 물리 키코드를 HID 리포트로 그대로 보낸다(uhid 키보드 — DesktopStream 정책 참고) —
+         한글 조합은 폰 IME가 직접 한다(한/영 전환: Shift+Space). 규칙:
+         · Esc는 기존대로 뒤로가기(Android BACK 주입), ⌘ 조합은 performKeyEquivalent(기존) 유지
+         · Shift/Ctrl/Option은 리포트 modifier 비트로 반영. Command는 HID GUI가 Android Meta로 오해될 수 있어 제외
+         · macOS IME 경로(interpretKeyEvents)는 쓰지 않는다 — 조합을 폰이 맡는다.
+       영향 범위: 데스크톱 앱 창 키보드 입력 전체. */
+    /// macOS 가상 키코드 → HID usage(USB HID Usage Tables — a=0x04…).
+    private static let hidUsage: [UInt16: UInt8] = [
+        0x00: 0x04, 0x01: 0x16, 0x02: 0x07, 0x03: 0x09, 0x04: 0x0B, 0x05: 0x0A, // a s d f h g
+        0x06: 0x1D, 0x07: 0x1B, 0x08: 0x06, 0x09: 0x19, 0x0B: 0x05,             // z x c v b
+        0x0C: 0x14, 0x0D: 0x1A, 0x0E: 0x08, 0x0F: 0x15, 0x10: 0x1C, 0x11: 0x17, // q w e r y t
+        0x12: 0x1E, 0x13: 0x1F, 0x14: 0x20, 0x15: 0x21, 0x16: 0x23, 0x17: 0x22, // 1 2 3 4 6 5
+        0x18: 0x2E, 0x19: 0x25, 0x1A: 0x24, 0x1B: 0x2D, 0x1C: 0x26, 0x1D: 0x27, // = 9 7 - 8 0
+        0x1E: 0x30, 0x1F: 0x12, 0x20: 0x18, 0x21: 0x2F, 0x22: 0x0C, 0x23: 0x13, // ] o u [ i p
+        0x24: 0x28, 0x25: 0x0F, 0x26: 0x0D, 0x27: 0x34, 0x28: 0x0E, 0x29: 0x33, // return l j ' k ;
+        0x2A: 0x31, 0x2B: 0x36, 0x2C: 0x38, 0x2D: 0x11, 0x2E: 0x10, 0x2F: 0x37, // \ , / n m .
+        0x30: 0x2B, 0x31: 0x2C, 0x32: 0x35, 0x33: 0x2A, 0x39: 0x39,             // tab space ` backspace caps
+        0x3A: 0x3A, 0x3B: 0x3B, 0x3C: 0x3C, 0x3D: 0x3D,                          // F1 F2 F3 F4
+        0x3E: 0x3E, 0x3F: 0x3F, 0x40: 0x40, 0x41: 0x41, 0x42: 0x42, 0x43: 0x43, // F5…F10
+        0x47: 0x44, 0x48: 0x45,                                                  // F11 F12
+        0x72: 0x49, 0x73: 0x4A, 0x74: 0x4B, 0x75: 0x4C, 0x77: 0x4D, 0x79: 0x4E, // help home pgup fwd-del end pgdn
+        0x7B: 0x50, 0x7C: 0x4F, 0x7D: 0x51, 0x7E: 0x52,                          // ← → ↓ ↑
     ]
 
-    /// 글자 → Android 키코드(Ctrl/Option 조합용).
-    private static func charKeycode(_ event: NSEvent) -> UInt32? {
-        guard let scalar = event.charactersIgnoringModifiers?.lowercased().unicodeScalars.first else { return nil }
-        let v = scalar.value
-        if (0x61...0x7a).contains(v) { return 29 + (v - 0x61) }   // a-z → KEYCODE_A..Z
-        if (0x30...0x39).contains(v) { return 7 + (v - 0x30) }    // 0-9
-        let table: [Character: UInt32] = [
-            " ": 62, ",": 55, ".": 56, "/": 76, "-": 69, "=": 70, "[": 71, "]": 72,
-            "\\": 73, ";": 74, "'": 75, "`": 68,
-        ]
-        return table[Character(scalar)]
+    /// 지금 눌려 있는 HID 키(usage) — 리포트 재계산용.
+    private var hidKeys: Set<UInt8> = []
+
+    /// Shift/Ctrl/Option → HID modifier 비트(Command 제외).
+    private static func hidModifiers(_ flags: NSEvent.ModifierFlags) -> UInt8 {
+        var bits: UInt8 = 0
+        if flags.contains(.shift) { bits |= 0x02 }   // LShift
+        if flags.contains(.control) { bits |= 0x01 } // LCtrl
+        if flags.contains(.option) { bits |= 0x04 }  // LAlt
+        return bits
     }
 
-    private static func metaState(_ flags: NSEvent.ModifierFlags) -> UInt32 {
-        var meta: UInt32 = 0
-        if flags.contains(.shift) { meta |= 0x41 }      // SHIFT_ON | SHIFT_LEFT_ON
-        if flags.contains(.control) { meta |= 0x3000 }  // CTRL_ON | CTRL_LEFT_ON
-        if flags.contains(.option) { meta |= 0x12 }     // ALT_ON | ALT_LEFT_ON
-        return meta
+    private func sendHIDReport(_ modifiers: UInt8) {
+        guard let stream = session?.input else { return }
+        let keys = hidKeys.sorted()
+        var report: [UInt8]
+        if keys.count > 6 {
+            report = [modifiers, 0, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01]  // phantom rollover
+        } else {
+            report = [modifiers, 0, 0, 0, 0, 0, 0, 0]
+            for (i, key) in keys.enumerated() { report[2 + i] = key }
+        }
+        stream.uhidInput(report)
     }
 
     override func keyDown(with event: NSEvent) {
         session?.nudgeAwake()
-        guard let stream = session?.input else { return }
-        let meta = Self.metaState(event.modifierFlags)
-        if let code = Self.specialKeys[event.keyCode] {
-            keysDown.insert(event.keyCode)
-            stream.key(.down, keycode: code, metaState: meta)
+        // Esc = 뒤로가기(기존 UX — Android BACK 주입)
+        if event.keyCode == 53 { session?.back(); return }
+        // ⌘ 조합은 performKeyEquivalent(기존 주입 경로)가 담당 — HID의 GUI(Modifier)는 Android Meta로 오해되니 제외
+        guard !event.modifierFlags.contains(.command), !event.isARepeat,
+              let usage = Self.hidUsage[event.keyCode] else {
+            Self.log.debug("keyDown skipped keyCode=\(event.keyCode, privacy: .public)")
             return
         }
-        if event.modifierFlags.contains(.control) || event.modifierFlags.contains(.option),
-           let code = Self.charKeycode(event) {
-            keysDown.insert(event.keyCode)
-            stream.key(.down, keycode: code, metaState: meta)
-            return
-        }
-        interpretKeyEvents([event])
+        hidKeys.insert(usage)
+        sendHIDReport(Self.hidModifiers(event.modifierFlags))
     }
 
     override func keyUp(with event: NSEvent) {
-        guard keysDown.remove(event.keyCode) != nil, let stream = session?.input else { return }
-        let meta = Self.metaState(event.modifierFlags)
-        if let code = Self.specialKeys[event.keyCode] ?? Self.charKeycode(event) {
-            stream.key(.up, keycode: code, metaState: meta)
-        }
+        guard let usage = Self.hidUsage[event.keyCode] else { return }
+        hidKeys.remove(usage)
+        sendHIDReport(Self.hidModifiers(event.modifierFlags))
+    }
+
+    override func flagsChanged(with event: NSEvent) {
+        // modifier 눌림/해제 반영 — 키 목록은 그대로 두고 modifier 비트만 갱신해 재전송
+        sendHIDReport(Self.hidModifiers(event.modifierFlags))
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -226,7 +248,9 @@ final class DesktopVideoView: NSView, @preconcurrency NSTextInputClient {
 
     private func send(text: String) {
         guard !text.isEmpty, let stream = session?.input else { return }
-        if text.unicodeScalars.allSatisfy({ $0.isASCII }) {
+        let isASCII = text.unicodeScalars.allSatisfy(\.isASCII)
+        Self.log.info("send text len=\(text.count, privacy: .public) ascii=\(isASCII, privacy: .public) → \(isASCII ? "injectText" : "clipboard+paste", privacy: .public)")
+        if isASCII {
             stream.text(text)
         } else {
             stream.setClipboard(text, paste: true)
@@ -238,6 +262,7 @@ final class DesktopVideoView: NSView, @preconcurrency NSTextInputClient {
     func insertText(_ string: Any, replacementRange: NSRange) {
         marked = nil
         let text = (string as? String) ?? (string as? NSAttributedString)?.string ?? ""
+        Self.log.info("insertText len=\(text.count, privacy: .public) ascii=\(text.unicodeScalars.allSatisfy(\.isASCII), privacy: .public)")
         send(text: text)
     }
 
@@ -245,10 +270,12 @@ final class DesktopVideoView: NSView, @preconcurrency NSTextInputClient {
 
     func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
         let text = (string as? String) ?? (string as? NSAttributedString)?.string ?? ""
+        Self.log.debug("setMarkedText len=\(text.count, privacy: .public)")
         marked = text.isEmpty ? nil : text
     }
 
     func unmarkText() {
+        Self.log.debug("unmarkText len=\(self.marked?.count ?? 0, privacy: .public)")
         if let marked { send(text: marked) }
         marked = nil
     }
