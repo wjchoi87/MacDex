@@ -37,6 +37,7 @@ private struct DesktopShell: View {
     @State private var activePanel: StatusPanel?
     @State private var panelAnchors: [StatusPanel: CGRect] = [:]
     @State private var keyMonitor = DesktopKeyMonitor()
+    @State private var desktopWindow: NSWindow?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -70,6 +71,12 @@ private struct DesktopShell: View {
                     PhaseOverlay(session: session)
                     if session.phase == .running && session.phoneAsleep {
                         PhoneAsleepBanner(session: session)
+                            .frame(maxWidth: .infinity, alignment: .top)
+                            .padding(.top, 14)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                    if let message = session.transferMessage {
+                        TransferBanner(message: message, active: session.transferActive)
                             .frame(maxWidth: .infinity, alignment: .top)
                             .padding(.top, 14)
                             .transition(.move(edge: .top).combined(with: .opacity))
@@ -119,9 +126,11 @@ private struct DesktopShell: View {
                 }
             }
         }
+        .background(WindowCapture { desktopWindow = $0 })
         .onAppear {
             let launcher = $launcherOpen, recents = $recentsOpen, folder = $openFolder
             let panel = $activePanel, selected = $selection
+            let windowRef = $desktopWindow
             keyMonitor.install(back: {
                 if panel.wrappedValue != nil { panel.wrappedValue = nil; return true }
                 if folder.wrappedValue != nil { folder.wrappedValue = nil; return true }
@@ -147,12 +156,22 @@ private struct DesktopShell: View {
                 }
                 selected.wrappedValue = []
                 return true
-            })
+            }, copy: {
+                session.copyFromDevice()
+                return true
+            }, cut: {
+                session.cutFromDevice()
+                return true
+            }, paste: {
+                session.pasteFromMac()
+                return true
+            }, isDesktopWindow: { window in window === windowRef.wrappedValue })
         }
         .onDisappear { keyMonitor.remove() }
         .animation(.spring(response: 0.3, dampingFraction: 0.88), value: launcherOpen)
         .animation(.easeOut(duration: 0.18), value: recentsOpen)
         .animation(.easeOut(duration: 0.15), value: activePanel)
+        .animation(.easeOut(duration: 0.2), value: session.transferMessage)
         .animation(.spring(response: 0.28, dampingFraction: 0.86), value: openFolder)
         .animation(.spring(response: 0.25, dampingFraction: 0.85), value: session.snapPreview)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: session.phoneAsleep)
@@ -761,6 +780,7 @@ private struct Wallpaper: View {
     @Binding var selection: Set<String>
     @Binding var marquee: CGRect?
     let openLauncher: () -> Void
+    @State private var importOpen = false
 
     var body: some View {
         Group {
@@ -811,6 +831,8 @@ private struct Wallpaper: View {
             Button("앱 서랍 열기", action: openLauncher)
             Button("새 폴더") { session.createFolder(at: lastClickPoint()) }
             Divider()
+            Button("맥으로 파일 가져오기…") { importOpen = true }
+            Divider()
             Button("배경화면 변경…") { chooseWallpaper() }
             if session.wallpaperPath != nil {
                 Button("기본 배경화면으로") { session.setWallpaper(nil) }
@@ -819,6 +841,9 @@ private struct Wallpaper: View {
                 Divider()
                 Button("아이콘 정렬") { session.resetIconPositions() }
             }
+        }
+        .sheet(isPresented: $importOpen) {
+            PhoneFilePicker(session: session, isOpen: $importOpen)
         }
     }
 
@@ -1386,6 +1411,113 @@ private struct TrafficLight: View {
 
 // MARK: - 폰이 잠들었을 때
 
+/// 클립보드·파일 전송 진행/결과 배너(PhoneAsleepBanner와 같은 스타일).
+private struct TransferBanner: View {
+    let message: String
+    let active: Bool
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if active {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 14))
+            }
+            Text(message)
+                .font(.system(size: 12.5, weight: .semibold))
+                .lineLimit(2)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(
+            Capsule(style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(Capsule(style: .continuous).strokeBorder(.white.opacity(0.18)))
+        )
+        .shadow(color: .black.opacity(0.3), radius: 10, y: 4)
+        .environment(\.colorScheme, .dark)
+        .foregroundStyle(.white)
+    }
+}
+
+/// 폰→맥: Download 폴더에서 고른 파일을 맥 클립보드로 넣는 선택창(파인더 등에서 ⌘V로 붙여넣기).
+private struct PhoneFilePicker: View {
+    let session: DesktopSession
+    @Binding var isOpen: Bool
+    @State private var files: [DesktopSession.PhoneFile]?
+    @State private var selected: Set<String> = []
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Text("폰의 Download 폴더")
+                    .font(.system(size: 13, weight: .bold))
+                Spacer()
+                Button("새로고침") {
+                    selected = []
+                    files = nil
+                    Task { files = await session.listDownloadFiles() }
+                }
+                Button("닫기") { isOpen = false }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .padding(12)
+            Divider()
+            if let files {
+                if files.isEmpty {
+                    Spacer()
+                    Text("가져올 파일이 없습니다").foregroundStyle(.secondary)
+                    Spacer()
+                } else {
+                    List(selection: $selected) {
+                        ForEach(files) { file in
+                            HStack(spacing: 8) {
+                                Image(systemName: "doc")
+                                    .foregroundStyle(.secondary)
+                                Text(file.name)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Spacer(minLength: 8)
+                                Text(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 2)
+                            .tag(file.name)
+                        }
+                    }
+                    .listStyle(.inset)
+                    Divider()
+                    HStack {
+                        if !selected.isEmpty {
+                            Text("\(selected.count)개 선택")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("맥 클립보드로 복사") {
+                            session.copyToMacClipboard(files.filter { selected.contains($0.name) })
+                            isOpen = false
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(selected.isEmpty)
+                    }
+                    .padding(12)
+                }
+            } else {
+                Spacer()
+                ProgressView()
+                Spacer()
+            }
+        }
+        .frame(width: 460, height: 380)
+        .task { if files == nil { files = await session.listDownloadFiles() } }
+    }
+}
+
 /// 폰 화면이 꺼져 데스크톱이 멈췄다는 안내 — 깨우기는 사용자가 눌렀을 때만(폰 본체 상태는 자동으로 바꾸지 않는다).
 private struct PhoneAsleepBanner: View {
     let session: DesktopSession
@@ -1858,8 +1990,20 @@ private struct RecentsOverlay: View {
 final class DesktopKeyMonitor {
     private var token: Any?
 
+    /* 변경 전 정책: Esc(뒤로가기)·Delete·Enter만 처리했다. ⌘C/⌘X/⌘V는 앱 창(DesktopVideoView)이 first
+       responder일 때만 그 뷰가 처리했다(바탕화면에 포커스가 있으면 아무 일도 없었다).
+       변경 후 정책: ⌘C/⌘X/⌘V도 이 모니터가 처리해 데스크톱 창 어디서든 동작하게 한다.
+         조건: 이벤트의 창이 이 셸이 사는 창(설치 시 캡처한 NSWindow)이어야 하고, 맥 글자 입력칸(NSText)이
+         first responder면 맥 입력 그대로 흘려보낸다. 처리 결과가 true면 이벤트를 먹는다.
+         (앱 창 유무로 판별하면 창이 하나도 없는 데스크톱에서 ⌘V가 죽는다 — 창 정체성으로 판별.)
+       변경 이유: DeX 데스크톱↔맥 클립보드·파일 복사/붙여넣기(⌘C/⌘V)를 창 어디서나 쓰게(2026-11-05).
+       영향 범위: 데스크톱 창의 ⌘C/⌘X/⌘V. 본체 창·시트는 다른 NSWindow라 그대로 맥 동작. */
     func install(back: @escaping @MainActor () -> Bool, delete: @escaping @MainActor () -> Bool,
-                 enter: @escaping @MainActor () -> Bool) {
+                 enter: @escaping @MainActor () -> Bool,
+                 copy: @escaping @MainActor () -> Bool = { false },
+                 cut: @escaping @MainActor () -> Bool = { false },
+                 paste: @escaping @MainActor () -> Bool = { false },
+                 isDesktopWindow: @escaping @MainActor (NSWindow?) -> Bool = { _ in false }) {
         remove()
         token = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .otherMouseDown]) { event in
             let isBack = (event.type == .keyDown && event.keyCode == 53)
@@ -1868,9 +2012,22 @@ final class DesktopKeyMonitor {
                 && event.modifierFlags.intersection([.command, .control, .option]).isEmpty
             let isEnter = event.type == .keyDown && (event.keyCode == 36 || event.keyCode == 76)
                 && event.modifierFlags.intersection([.command, .control, .option]).isEmpty
-            guard isBack || isDelete || isEnter else { return event }
+            let isCmdKey = { () -> Bool in
+                guard event.type == .keyDown, event.modifierFlags.contains(.command),
+                      event.modifierFlags.intersection([.shift, .option, .control]).isEmpty,
+                      let window = event.window,
+                      MainActor.assumeIsolated { isDesktopWindow(window) },
+                      !(window.firstResponder is NSText) else { return false }
+                // ⌘X=7, ⌘C=8, ⌘V=9(macOS 가상 키코드)
+                return [7, 8, 9].contains(event.keyCode)
+            }()
+            guard isBack || isDelete || isEnter || isCmdKey else { return event }
             let handled = MainActor.assumeIsolated { () -> Bool in
                 if isBack { return back() }
+                if isCmdKey {
+                    // 앱 창(DesktopVideoView)이 first responder여도 같은 동작(파일까지 붙여넣는 상위 호환)
+                    return event.keyCode == 8 ? copy() : event.keyCode == 7 ? cut() : paste()
+                }
                 let responder = event.window?.firstResponder
                 if responder is DesktopVideoView || responder is NSText { return false }
                 return isEnter ? enter() : delete()
@@ -1882,5 +2039,30 @@ final class DesktopKeyMonitor {
     func remove() {
         if let token { NSEvent.removeMonitor(token) }
         token = nil
+    }
+}
+
+/// 이 뷰가 사는 NSWindow를 알려 준다(키 모니터가 데스크톱 창인지 판별용).
+private final class WindowFinderView: NSView {
+    var onWindow: ((NSWindow?) -> Void)?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        onWindow?(window)
+    }
+}
+
+private struct WindowCapture: NSViewRepresentable {
+    let onWindow: (NSWindow?) -> Void
+
+    func makeNSView(context: Context) -> WindowFinderView {
+        let view = WindowFinderView()
+        view.onWindow = onWindow
+        return view
+    }
+
+    func updateNSView(_ view: WindowFinderView, context: Context) {
+        view.onWindow = onWindow
+        if view.window != nil { onWindow(view.window) }
     }
 }

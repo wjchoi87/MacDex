@@ -514,6 +514,141 @@ final class DesktopSession {
 
     var input: DesktopStream? { stream }
 
+    // MARK: 클립보드·파일 주고받기(맥 ⇄ 폰)
+
+    /* 변경 전 정책: 텍스트는 기기→맥만 자동 동기(onClipboard)됐고, 맥→기기 ⌘V는 앱 창(DesktopVideoView)이
+       first responder일 때만 동작했다. 파일은 본체 화면의 '파일 전송'으로만 맥→폰 push했고 ⌘C/⌘V와 무관했다.
+       변경 후 정책: 데스크톱 창 어디서나(DesktopKeyMonitor) ⌘C/⌘X/⌘V —
+         ⌘C/⌘X: 기기에 Ctrl+C/X를 보낸다(기기 클립보드가 바뀌면 onClipboard가 맥 클립보드로 자동 동기화).
+         ⌘V: 맥 클립보드에 파일 URL(파인더 ⌘C)이 있으면 폰 Download으로 전송, 이미지(png/tiff)면 png 파일로
+           만들어 전송, 텍스트면 기기 클립보드로 넣어 바로 붙여넣는다.
+         폰→맥 파일: 바탕화면 우클릭 '맥으로 파일 가져오기…'에서 Download 파일을 골라 맥 클립보드에 넣는다
+           (파인더 등 맥에서 ⌘V로 붙여넣는다). 기기 클립보드의 파일 URI는 읽을 방법이 없어(scrcpy는 텍스트만
+           보내고 shell은 다른 앱 clipboard 접근이 막힘) 이 경로로 제공한다.
+       변경 이유: 대장님 요청 — DeX 데스크톱과 맥 간 양방향 클립보드·파일 복사/붙여넣기(⌘C/⌘V).
+       영향 범위: 데스크톱 창의 ⌘C/⌘X/⌘V, 바탕화면 우클릭 메뉴, 상단 전송 배너. 미러 창(scrcpy)은 무관. */
+
+    /// 폰 Download 폴더의 파일 한 건(폰→맥 선택창용).
+    struct PhoneFile: Identifiable, Hashable {
+        let name: String
+        let size: Int
+        var id: String { name }
+        var remotePath: String { "/sdcard/Download/\(name)" }
+    }
+
+    /// 전송 배너 — 진행 중(active)이면 인디케이터, 끝나면 결과를 4초 보여 주고 사라진다.
+    private(set) var transferActive = false
+    private(set) var transferMessage: String?
+    private var transferTask: Task<Void, Never>?
+    private var transferHideTask: Task<Void, Never>?
+
+    /// ⌘V — 맥 클립보드를 기기에 붙여넣는다. 파일이면 폰 Download으로, 이미지면 png로 만들어 전송한다.
+    func pasteFromMac() {
+        let board = NSPasteboard.general
+        if let urls = board.readObjects(forClasses: [NSURL.self],
+                                        options: [.urlReadingFileURLsOnly: true]) as? [URL], !urls.isEmpty {
+            sendFilesToPhone(urls)
+            return
+        }
+        if let text = board.string(forType: .string), !text.isEmpty {
+            stream?.setClipboard(text, paste: true)
+            return
+        }
+        // 이미지(스크린샷 ⌘⇧⌃Ⓢ 등) — png 파일로 만들어 전송. 텍스트·파일이 없을 때만.
+        if let png = board.data(forType: .png) ?? (board.data(forType: .tiff).flatMap {
+            NSBitmapImageRep(data: $0)?.representation(using: .png, properties: [:])
+        }) {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyyMMdd-HHmmss"
+            let stamp = formatter.string(from: Date())
+            let url = FileManager.default.temporaryDirectory.appending(path: "macdroid-clipboard-\(stamp).png")
+            if (try? png.write(to: url)) != nil { sendFilesToPhone([url]) }
+        }
+    }
+
+    /// ⌘C — 기기에 Ctrl+C. 기기 앱이 복사하면 클립보드 변경이 맥으로 자동 동기된다.
+    func copyFromDevice() { stream?.pressKey(31, metaState: 0x3000) }   // KEYCODE_C + CTRL
+    /// ⌘X — 기기에 Ctrl+X.
+    func cutFromDevice() { stream?.pressKey(52, metaState: 0x3000) }    // KEYCODE_X + CTRL
+
+    /// 맥 파일들을 폰 Download으로 보낸다(기존 파일 전송과 같은 목적지·문구).
+    func sendFilesToPhone(_ files: [URL]) {
+        guard !files.isEmpty else { return }
+        transferTask?.cancel()
+        transferHideTask?.cancel()
+        transferActive = true
+        transferMessage = String(localized: "파일 전송 중… \(files.count)개")
+        transferTask = Task { [serial] in
+            var failures: [String] = []
+            for file in files {
+                do { try await ADB.push(serial: serial, file: file) }
+                catch { failures.append(file.lastPathComponent) }
+            }
+            endTransfer(failures.isEmpty
+                        ? String(localized: "전송 완료: 폰의 Download 폴더에 저장됨")
+                        : String(localized: "전송 실패: \(failures.joined(separator: ", "))"))
+        }
+    }
+
+    /// 폰 Download 폴더의 파일 목록(빈 배열 = 폴더가 비었음, nil = 읽기 실패).
+    func listDownloadFiles() async -> [PhoneFile]? {
+        // ls -la의 한 줄: 권한 링크 소유자 그룹 크기 날짜 시간 이름(이름에는 공백이 있을 수 있다)
+        guard let out = try? await ADB.shell(serial: serial, "ls -la /sdcard/Download") else { return nil }
+        return out.split(separator: "\n").compactMap { line -> PhoneFile? in
+            let parts = line.split(separator: " ", maxSplits: 7, omittingEmptySubsequences: true)
+            guard parts.count == 8, parts[0].hasPrefix("-"), let size = Int(parts[4]),
+                  !parts[7].hasPrefix("."), parts[7] != "total" else { return nil }
+            return PhoneFile(name: String(parts[7]), size: size)
+        }
+        .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    /// 고른 Download 파일들을 맥 클립보드에 넣는다 — 파인더 등에서 ⌘V로 붙여넣는다.
+    func copyToMacClipboard(_ files: [PhoneFile]) {
+        guard !files.isEmpty else { return }
+        transferTask?.cancel()
+        transferHideTask?.cancel()
+        transferActive = true
+        transferMessage = String(localized: "가져오는 중… \(files.count)개")
+        transferTask = Task { [serial] in
+            // 받는 곳: 앱 지원 폴더의 임시 폴더(맥의 기존 파일을 덮어쓰지 않게)
+            let dir = Binaries.appSupport.appending(path: "Transfers/\(UUID().uuidString)", directoryHint: .isDirectory)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            var copied: [URL] = []
+            var failures: [String] = []
+            for file in files {
+                do {
+                    try await ADB.pull(serial: serial, remote: file.remotePath, to: dir)
+                    copied.append(dir.appending(path: file.name))
+                } catch { failures.append(file.name) }
+            }
+            if !copied.isEmpty {
+                let board = NSPasteboard.general
+                board.clearContents()
+                board.writeObjects(copied as [NSURL])
+            }
+            if copied.isEmpty {
+                endTransfer(String(localized: "가져오기 실패: \(failures.joined(separator: ", "))"))
+            } else if failures.isEmpty {
+                endTransfer(String(localized: "\(copied.count)개 파일을 맥 클립보드에 넣었습니다 — 맥에서 ⌘V로 붙여넣으세요"))
+            } else {
+                endTransfer(String(localized: "가져오기 실패: \(failures.joined(separator: ", "))"))
+            }
+        }
+    }
+
+    /// 전송 배너를 결과 상태로 바꾸고 4초 뒤 지운다.
+    private func endTransfer(_ message: String) {
+        transferActive = false
+        transferMessage = message
+        transferHideTask?.cancel()
+        transferHideTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled else { return }
+            self?.transferMessage = nil
+        }
+    }
+
     func back() {
         stream?.pressKey(4)   // KEYCODE_BACK — 이 디스플레이의 포커스 창으로 간다
     }
