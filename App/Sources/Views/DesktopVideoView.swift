@@ -226,25 +226,41 @@ final class DesktopVideoView: NSView, @preconcurrency NSTextInputClient {
         case "x": cut(nil)
         case "a": selectAll(nil)
         case "z":
-            sendCtrl(54, shift: event.modifierFlags.contains(.shift))   // KEYCODE_Z
+            sendHIDCombo(modifier: event.modifierFlags.contains(.shift) ? 0x03 : 0x01,
+                         key: 0x1D)   // (Ctrl|Shift) + Z
         default:
             return false
         }
         return true
     }
 
-    private func sendCtrl(_ keycode: UInt32, shift: Bool = false) {
-        session?.input?.pressKey(keycode, metaState: 0x3000 | (shift ? 0x41 : 0))
+    /* 변경 전 정책: ⌘C/X/A/Z는 Android keycode 주입(Ctrl 조합), ⌘V는 맥 클립보드를 기기 클립보드로
+         복사 + 붙여넣기 키 주입(setClipboard+paste)로 처리했다.
+       결함(실측): 주입된 Ctrl 조합/붙여넣기 키를 앱들이 무시해 동작하지 않았다(한글 입력과 같은 원인).
+       변경 후 정책: 단축키 전부를 uhid HID 리포트(Ctrl+글자)로 보낸다 — 물리 키보드의 Ctrl 조합과
+         동일해 앱들이 일관되게 처리한다. 이로써 setClipboard(클립보드 복사) 경로는 데스크톱에서 완전히 사라진다.
+       영향 범위: 데스크톱 앱 창의 ⌘ 단축키(붙여넣기·복사·잘라내기·전체선택·실행취소). */
+    private func sendHIDCombo(modifier: UInt8, key: UInt8) {
+        guard let stream = session?.input else { return }
+        stream.uhidInput([modifier, 0, key, 0, 0, 0, 0, 0])   // down
+        stream.uhidInput([0, 0, 0, 0, 0, 0, 0, 0])             // up
     }
 
     @objc func paste(_ sender: Any?) {
-        guard let text = NSPasteboard.general.string(forType: .string) else { return }
-        session?.input?.setClipboard(text, paste: true)
+        sendHIDCombo(modifier: 0x01, key: 0x19)   // Ctrl + V
     }
 
-    @objc func copy(_ sender: Any?) { sendCtrl(31) }       // KEYCODE_C
-    @objc func cut(_ sender: Any?) { sendCtrl(52) }        // KEYCODE_X
-    override func selectAll(_ sender: Any?) { sendCtrl(29) }  // KEYCODE_A
+    @objc func copy(_ sender: Any?) {
+        sendHIDCombo(modifier: 0x01, key: 0x06)   // Ctrl + C
+    }
+
+    @objc func cut(_ sender: Any?) {
+        sendHIDCombo(modifier: 0x01, key: 0x1B)   // Ctrl + X
+    }
+
+    override func selectAll(_ sender: Any?) {
+        sendHIDCombo(modifier: 0x01, key: 0x04)   // Ctrl + A
+    }
 
     private func send(text: String) {
         guard !text.isEmpty, let stream = session?.input else { return }
