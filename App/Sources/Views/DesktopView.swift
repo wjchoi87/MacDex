@@ -74,6 +74,12 @@ private struct DesktopShell: View {
                             .padding(.top, 14)
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
+                    if session.phase == .running && session.showIMEHint && !session.phoneAsleep {
+                        IMEHintBanner(session: session)
+                            .frame(maxWidth: .infinity, alignment: .top)
+                            .padding(.top, 14)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
                     if let openFolder, session.folders[openFolder] != nil {
                         FolderOverlay(session: session, folderID: openFolder, isOpen: $openFolder)
                             .transition(.opacity.combined(with: .scale(scale: 0.97)))
@@ -1294,6 +1300,45 @@ private struct PhoneAsleepBanner: View {
             Button("폰 깨우기") { session.wakePhone() }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(
+            Capsule(style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(Capsule(style: .continuous).strokeBorder(.white.opacity(0.18)))
+        )
+        .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
+        .environment(\.colorScheme, .dark)
+        .foregroundStyle(.white)
+    }
+}
+
+/// 한글 입력에 폰 본체 잠금이 필요하다는 안내 — 잠그기는 사용자가 눌렀을 때만(폰 본체 상태는 자동으로 바꾸지 않는다).
+/* 표시 조건은 DesktopSession.markKeyboardUsed — 키보드 입력이 있는데 본체가 깨어 있을 때만 뜬다. */
+private struct IMEHintBanner: View {
+    let session: DesktopSession
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "character.cursor.ibeam")
+                .font(.system(size: 16))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("폰 본체 화면이 켜져 있으면 한글이 입력되지 않아요").font(.system(size: 13, weight: .semibold))
+                Text("본체를 잠그면 데스크톱에서 바로 한글(Shift+Space 한/영)이 됩니다").font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+            Button("본체 잠그기") { session.lockPhoneNow() }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            Button {
+                session.dismissIMEHint()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("닫기")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)

@@ -168,6 +168,8 @@ final class DesktopVideoView: NSView, @preconcurrency NSTextInputClient {
 
     /// 지금 눌려 있는 HID 키(usage) — 리포트 재계산용.
     private var hidKeys: Set<UInt8> = []
+    /// 직전 Caps Lock 상태(flagsChanged에서 토글 감지용).
+    private var capsLockOn = false
 
     /// Shift/Ctrl/Option → HID modifier 비트(Command 제외).
     private static func hidModifiers(_ flags: NSEvent.ModifierFlags) -> UInt8 {
@@ -193,6 +195,8 @@ final class DesktopVideoView: NSView, @preconcurrency NSTextInputClient {
 
     override func keyDown(with event: NSEvent) {
         session?.nudgeAwake()
+        // 본체가 켜져 있으면 한글 IME가 데스크톱에 안 붙는다 — 안내 배너 조건 체크(DesktopSession 정책)
+        session?.markKeyboardUsed()
         // Esc = 뒤로가기(기존 UX — Android BACK 주입)
         if event.keyCode == 53 { session?.back(); return }
         // ⌘ 조합은 performKeyEquivalent(기존 주입 경로)가 담당 — HID의 GUI(Modifier)는 Android Meta로 오해되니 제외
@@ -212,8 +216,26 @@ final class DesktopVideoView: NSView, @preconcurrency NSTextInputClient {
     }
 
     override func flagsChanged(with event: NSEvent) {
+        // Caps Lock은 macOS가 modifier 플래그로만 알려준다 — 토글 시 HID 키 down/up으로 전달한다
+        let caps = event.modifierFlags.contains(.capsLock)
+        if caps && !capsLockOn, let stream = session?.input {
+            var report = [UInt8](repeating: 0, count: 8)
+            report[2] = 0x39   // HID Caps Lock
+            stream.uhidInput(report)
+            stream.uhidInput([0, 0, 0, 0, 0, 0, 0, 0])
+        }
+        capsLockOn = caps
         // modifier 눌림/해제 반영 — 키 목록은 그대로 두고 modifier 비트만 갱신해 재전송
         sendHIDReport(Self.hidModifiers(event.modifierFlags))
+    }
+
+    override func resignFirstResponder() -> Bool {
+        // 포커스를 잃을 때 눌려 있는 키를 해제한다(해제 리포트를 안 보내면 폰에서 키가 눌린 채 남는다)
+        if !hidKeys.isEmpty {
+            hidKeys.removeAll()
+            sendHIDReport(0)
+        }
+        return super.resignFirstResponder()
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {

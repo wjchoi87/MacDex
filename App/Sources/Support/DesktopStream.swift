@@ -291,7 +291,7 @@ final class DesktopStream: @unchecked Sendable {
        영향 범위: 데스크톱 세션의 비ASCII(한글 등) 텍스트 입력과 ⌘V 붙여넣기. */
     func setClipboard(_ text: String, paste: Bool) {
         let bytes = Array(text.utf8)
-        Self.log.info("control SET_CLIPBOARD bytes=\(bytes.count, privacy: .public) paste=\(paste, privacy: .public) ctrlV=\(paste, privacy: .public)")
+        Self.log.info("control SET_CLIPBOARD bytes=\(bytes.count, privacy: .public) paste=\(paste, privacy: .public)")
         var msg: [UInt8] = [9]
         msg.appendBE(UInt64(0))   // sequence 0 = ack 불필요
         msg.append(0)             // paste=false — 붙여넣기 키는 클라이언트가 직접 주입
