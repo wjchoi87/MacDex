@@ -612,6 +612,17 @@ enum ADB {
         return true
     }
 
+    /// 기기가 깨어 있으면 화면을 끈다(끄면 키가드 잠금 — 한글 IME가 데스크톱 디스플레이로 붙는 조건).
+    /* 정책: 사용자가 '본체 잠그기' 버튼을 누를 때만 호출한다(기존 '폰 전원은 건드리지 않는다' 정책 유지).
+       KEYCODE_SLEEP은 화면이 이미 꺼져 있으면 아무것도 안 하므로(POWER 토글과 달리) 안전하다. */
+    @discardableResult
+    static func sleepIfAwake(serial: String) async -> Bool {
+        guard let out = try? await shell(serial: serial, "dumpsys power | grep -m1 mWakefulness="),
+              out.contains("Awake") else { return false }
+        _ = try? await shell(serial: serial, "input keyevent KEYCODE_SLEEP")
+        return true
+    }
+
     /// 예전 버전 MacDroid가 남긴 데스크톱 wakelock 정리(셸이 잡은 화면 wakelock = MacDroid 것).
     /* 정책: 지금은 폰 전원을 건드리지 않는다(DesktopSession '폰 상태' 정책). 다만 이전 버전이 데스크톱 디스플레이에
        잡아 둔 화면 wakelock이 남아 있으면 폰이 잠들지 못하므로 데스크톱을 열 때 놓아 준다. */

@@ -704,6 +704,34 @@ final class DesktopSession {
         }
     }
 
+    // MARK: 한글 입력 조건(본체 잠금)
+
+    /* 정책(한글 IME 안내): 안드로이드 IME는 한 번에 한 디스플레이만 담당한다(실측 — 인사이트 macdex-i-ime).
+       폰 본체 화면이 켜져 있으면 IME가 본체에 붙어 데스크톱 물리 키보드(uhid)의 한글이 조합되지 않고
+       영어만 입력된다. 본체를 잠그면(화면 끔) IME가 데스크톱 디스플레이로 붙어 한/영(Shift+Space)·조합이 동작한다.
+       키보드 입력이 있는데 본체가 깨어 있으면 배너로 안내하고, [본체 잠그기]는 사용자가 누를 때만 잠근다. */
+    /// 한글 입력에 본체 잠금이 필요하다는 안내 배너 표시 여부.
+    private(set) var showIMEHint = false
+
+    /// 데스크톱 창에서 키보드 입력이 시작됐을 때 — 본체가 깨어 있으면(=한글이 안 되는 상태) 안내를 띄운다.
+    func markKeyboardUsed() {
+        if !phoneAsleep { showIMEHint = true }
+    }
+
+    /// 사용자가 [본체 잠그기]를 눌렀을 때만.
+    func lockPhoneNow() {
+        Task {
+            await ADB.sleepIfAwake(serial: serial)
+            try? await Task.sleep(for: .milliseconds(600))
+            await refreshPhoneState()
+            if phoneAsleep { showIMEHint = false }
+        }
+    }
+
+    func dismissIMEHint() {
+        showIMEHint = false
+    }
+
     // MARK: 상태표시줄
 
     func refreshNotifications() async {

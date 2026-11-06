@@ -168,6 +168,8 @@ final class DesktopVideoView: NSView, @preconcurrency NSTextInputClient {
 
     /// 지금 눌려 있는 HID 키(usage) — 리포트 재계산용.
     private var hidKeys: Set<UInt8> = []
+    /// 직전 Caps Lock 상태(flagsChanged에서 토글 감지용).
+    private var capsLockOn = false
 
     /// Shift/Ctrl/Option → HID modifier 비트(Command 제외).
     private static func hidModifiers(_ flags: NSEvent.ModifierFlags) -> UInt8 {
@@ -193,6 +195,8 @@ final class DesktopVideoView: NSView, @preconcurrency NSTextInputClient {
 
     override func keyDown(with event: NSEvent) {
         session?.nudgeAwake()
+        // 본체가 켜져 있으면 한글 IME가 데스크톱에 안 붙는다 — 안내 배너 조건 체크(DesktopSession 정책)
+        session?.markKeyboardUsed()
         // Esc = 뒤로가기(기존 UX — Android BACK 주입)
         if event.keyCode == 53 { session?.back(); return }
         // ⌘ 조합은 performKeyEquivalent(기존 주입 경로)가 담당 — HID의 GUI(Modifier)는 Android Meta로 오해되니 제외
@@ -212,8 +216,26 @@ final class DesktopVideoView: NSView, @preconcurrency NSTextInputClient {
     }
 
     override func flagsChanged(with event: NSEvent) {
+        // Caps Lock은 macOS가 modifier 플래그로만 알려준다 — 토글 시 HID 키 down/up으로 전달한다
+        let caps = event.modifierFlags.contains(.capsLock)
+        if caps && !capsLockOn, let stream = session?.input {
+            var report = [UInt8](repeating: 0, count: 8)
+            report[2] = 0x39   // HID Caps Lock
+            stream.uhidInput(report)
+            stream.uhidInput([0, 0, 0, 0, 0, 0, 0, 0])
+        }
+        capsLockOn = caps
         // modifier 눌림/해제 반영 — 키 목록은 그대로 두고 modifier 비트만 갱신해 재전송
         sendHIDReport(Self.hidModifiers(event.modifierFlags))
+    }
+
+    override func resignFirstResponder() -> Bool {
+        // 포커스를 잃을 때 눌려 있는 키를 해제한다(해제 리포트를 안 보내면 폰에서 키가 눌린 채 남는다)
+        if !hidKeys.isEmpty {
+            hidKeys.removeAll()
+            sendHIDReport(0)
+        }
+        return super.resignFirstResponder()
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -226,25 +248,41 @@ final class DesktopVideoView: NSView, @preconcurrency NSTextInputClient {
         case "x": cut(nil)
         case "a": selectAll(nil)
         case "z":
-            sendCtrl(54, shift: event.modifierFlags.contains(.shift))   // KEYCODE_Z
+            sendHIDCombo(modifier: event.modifierFlags.contains(.shift) ? 0x03 : 0x01,
+                         key: 0x1D)   // (Ctrl|Shift) + Z
         default:
             return false
         }
         return true
     }
 
-    private func sendCtrl(_ keycode: UInt32, shift: Bool = false) {
-        session?.input?.pressKey(keycode, metaState: 0x3000 | (shift ? 0x41 : 0))
+    /* 변경 전 정책: ⌘C/X/A/Z는 Android keycode 주입(Ctrl 조합), ⌘V는 맥 클립보드를 기기 클립보드로
+         복사 + 붙여넣기 키 주입(setClipboard+paste)로 처리했다.
+       결함(실측): 주입된 Ctrl 조합/붙여넣기 키를 앱들이 무시해 동작하지 않았다(한글 입력과 같은 원인).
+       변경 후 정책: 단축키 전부를 uhid HID 리포트(Ctrl+글자)로 보낸다 — 물리 키보드의 Ctrl 조합과
+         동일해 앱들이 일관되게 처리한다. 이로써 setClipboard(클립보드 복사) 경로는 데스크톱에서 완전히 사라진다.
+       영향 범위: 데스크톱 앱 창의 ⌘ 단축키(붙여넣기·복사·잘라내기·전체선택·실행취소). */
+    private func sendHIDCombo(modifier: UInt8, key: UInt8) {
+        guard let stream = session?.input else { return }
+        stream.uhidInput([modifier, 0, key, 0, 0, 0, 0, 0])   // down
+        stream.uhidInput([0, 0, 0, 0, 0, 0, 0, 0])             // up
     }
 
     @objc func paste(_ sender: Any?) {
-        guard let text = NSPasteboard.general.string(forType: .string) else { return }
-        session?.input?.setClipboard(text, paste: true)
+        sendHIDCombo(modifier: 0x01, key: 0x19)   // Ctrl + V
     }
 
-    @objc func copy(_ sender: Any?) { sendCtrl(31) }       // KEYCODE_C
-    @objc func cut(_ sender: Any?) { sendCtrl(52) }        // KEYCODE_X
-    override func selectAll(_ sender: Any?) { sendCtrl(29) }  // KEYCODE_A
+    @objc func copy(_ sender: Any?) {
+        sendHIDCombo(modifier: 0x01, key: 0x06)   // Ctrl + C
+    }
+
+    @objc func cut(_ sender: Any?) {
+        sendHIDCombo(modifier: 0x01, key: 0x1B)   // Ctrl + X
+    }
+
+    override func selectAll(_ sender: Any?) {
+        sendHIDCombo(modifier: 0x01, key: 0x04)   // Ctrl + A
+    }
 
     private func send(text: String) {
         guard !text.isEmpty, let stream = session?.input else { return }
